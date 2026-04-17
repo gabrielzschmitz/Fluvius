@@ -515,8 +515,7 @@ inline void RenderPressureField(
         components::CircleComponent& c) {
       Color col = PressureToColor(c.pressure);
 
-      DrawCircleGradient(pos.position.x, pos.position.y,
-                         entities::smoothing_radius * 0.8f, col,
+      DrawCircleGradient(pos.position, entities::smoothing_radius * 0.8f, col,
                          Color{col.r, col.g, col.b, 0});
     });
 
