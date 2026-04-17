@@ -1,0 +1,34 @@
+name: Build Windows
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          install: mingw-w64-x86_64-gcc make unzip
+
+      - name: Generate project files
+        shell: msys2 {0}
+        run: |
+          cd build
+          ./premake5.exe gmake
+
+      - name: Build Release
+        shell: msys2 {0}
+        run: |
+          make config=release_x64
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluvius-windows
+          path: bin/Release/Fluvius.exe

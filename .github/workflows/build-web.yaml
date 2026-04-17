@@ -1,0 +1,47 @@
+name: Build Web
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Emscripten SDK
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+
+      - name: Activate Emscripten environment
+        run: |
+          cd emsdk
+          source ./emsdk_env.sh
+          echo "EMSDK activated"
+
+      - name: Generate project files
+        run: |
+          source emsdk/emsdk_env.sh
+          cd build
+          ./premake5 gmake --with-emscripten --graphics=openges2
+
+      - name: Build Web release
+        run: |
+          source emsdk/emsdk_env.sh
+          emmake make config=release_web
+
+      - name: Upload Web build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluvius-web
+          path: |
+            bin/Release/Fluvius.html
+            bin/Release/Fluvius.js
+            bin/Release/Fluvius.wasm
+            bin/Release/Fluvius.data

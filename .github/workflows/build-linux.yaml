@@ -1,0 +1,33 @@
+name: Build Linux
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential xorg-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev premake4
+
+      - name: Generate project files
+        run: |
+          cd build
+          ./premake5 gmake
+
+      - name: Build Release
+        run: |
+          make config=release_x64
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluvius-linux
+          path: bin/Release/Fluvius
