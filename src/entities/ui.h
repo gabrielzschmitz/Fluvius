@@ -33,6 +33,12 @@ inline int low_color_index = 3;
 inline int mid_color_index = 0;
 inline int high_color_index = 1;
 
+// PURPLE, BLUE, CYAN, GREEN, YELLOW, RED, WHITE
+inline int particle_low_color_index = 1;
+inline int particle_mid_low_color_index = 2;
+inline int particle_mid_high_color_index = 4;
+inline int particle_high_color_index = 5;
+
 inline void CreateUI(engine::ECS& ecs) {
   //
   // Window
@@ -550,6 +556,169 @@ inline void CreateUI(engine::ECS& ecs) {
   ecs.add<engine::components::UITooltipComponent>(
     high_color_dropdown, "Control the color of mid pressure areas.");
   ecs.add<engine::components::UIGroupChildComponent>(high_color_dropdown,
+                                                     render_group);
+
+  //
+  // Particle Colors Text
+  //
+  engine::Entity particle_text = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    particle_text,
+    engine::components::UILayoutChildComponent{window, -1.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(particle_text);
+
+  ecs.add<engine::components::UITextComponent>(
+    particle_text, engine::components::UITextComponent("Particle Colors:"));
+
+  ecs.add<engine::components::UITooltipComponent>(
+    particle_text, "Change the particle colors for low/mid/high velocity.");
+
+  ecs.add<engine::components::UIGroupChildComponent>(particle_text,
+                                                     render_group);
+
+  //
+  // New line
+  //
+  engine::Entity particle_newline = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    particle_newline,
+    engine::components::UILayoutChildComponent{window, 0.f, 0.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(particle_newline);
+
+  ecs.add<engine::components::UINewLineComponent>(particle_newline);
+  ecs.add<engine::components::UIGroupChildComponent>(particle_newline,
+                                                     render_group);
+
+  //
+  // Low color dropdown
+  //
+  engine::Entity particle_low_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    particle_low_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(particle_low_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    particle_low_dropdown,
+    engine::components::UIDropdownComponent{
+      "Low",
+      {"Purple", "Blue", "Cyan", "Green", "Yellow", "Red", "White"},
+      &particle_low_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"Purple", {180, 80, 255, 190}}, {"Blue", {0, 120, 255, 190}},
+          {"Cyan", {0, 255, 255, 190}},    {"Green", {0, 200, 100, 190}},
+          {"Yellow", {255, 220, 0, 180}},  {"Red", {255, 50, 50, 160}},
+          {"White", {255, 255, 255, 190}}};
+
+        particle_low_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    particle_low_dropdown, "Control the color of low velocity particles.");
+  ecs.add<engine::components::UIGroupChildComponent>(particle_low_dropdown,
+                                                     render_group);
+
+  //
+  // Mid-low color dropdown
+  //
+  engine::Entity particle_mid_low_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    particle_mid_low_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(
+    particle_mid_low_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    particle_mid_low_dropdown,
+    engine::components::UIDropdownComponent{
+      "Mid-Low",
+      {"Purple", "Blue", "Cyan", "Green", "Yellow", "Red", "White"},
+      &particle_mid_low_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"Purple", {180, 80, 255, 190}}, {"Blue", {0, 120, 255, 190}},
+          {"Cyan", {0, 255, 255, 190}},    {"Green", {0, 200, 100, 190}},
+          {"Yellow", {255, 220, 0, 180}},  {"Red", {255, 50, 50, 160}},
+          {"White", {255, 255, 255, 190}}};
+
+        particle_mid_low_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    particle_mid_low_dropdown,
+    "Control the color of mid-low velocity particles.");
+  ecs.add<engine::components::UIGroupChildComponent>(particle_mid_low_dropdown,
+                                                     render_group);
+
+  //
+  // Mid-high color dropdown
+  //
+  engine::Entity particle_mid_high_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    particle_mid_high_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(
+    particle_mid_high_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    particle_mid_high_dropdown,
+    engine::components::UIDropdownComponent{
+      "Mid-High",
+      {"Purple", "Blue", "Cyan", "Green", "Yellow", "Red", "White"},
+      &particle_mid_high_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"Purple", {180, 80, 255, 190}}, {"Blue", {0, 120, 255, 190}},
+          {"Cyan", {0, 255, 255, 190}},    {"Green", {0, 200, 100, 190}},
+          {"Yellow", {255, 220, 0, 180}},  {"Red", {255, 50, 50, 160}},
+          {"White", {255, 255, 255, 190}}};
+
+        particle_mid_high_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    particle_mid_high_dropdown,
+    "Control the color of mid-high velocity particles.");
+  ecs.add<engine::components::UIGroupChildComponent>(particle_mid_high_dropdown,
+                                                     render_group);
+
+  //
+  // High color dropdown
+  //
+  engine::Entity particle_high_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    particle_high_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(particle_high_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    particle_high_dropdown,
+    engine::components::UIDropdownComponent{
+      "High",
+      {"Purple", "Blue", "Cyan", "Green", "Yellow", "Red", "White"},
+      &particle_high_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"Purple", {180, 80, 255, 190}}, {"Blue", {0, 120, 255, 190}},
+          {"Cyan", {0, 255, 255, 190}},    {"Green", {0, 200, 100, 190}},
+          {"Yellow", {255, 220, 0, 180}},  {"Red", {255, 50, 50, 160}},
+          {"White", {255, 255, 255, 190}}};
+
+        particle_high_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    particle_high_dropdown, "Control the color of high velocity particles.");
+  ecs.add<engine::components::UIGroupChildComponent>(particle_high_dropdown,
                                                      render_group);
 
   // LOG

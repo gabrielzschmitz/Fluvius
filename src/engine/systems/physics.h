@@ -490,17 +490,18 @@ inline Color VelocityToColor(const Vector2& velocity) {
                  LerpChannel(c1.b, c2.b, factor), 255};
   };
 
-  constexpr Color blue = {0, 120, 255, 255};
-  constexpr Color green = {0, 255, 120, 255};
-  constexpr Color yellow = {255, 220, 0, 255};
-  constexpr Color red = {255, 40, 40, 255};
-
   if (speed_ratio < 0.33f) {
-    return LerpColor(blue, green, speed_ratio / 0.33f);
+    float t = speed_ratio / 0.33f;
+    return LerpColor(entities::particle_low_color,
+                     entities::particle_mid_low_color, t);
   } else if (speed_ratio < 0.66f) {
-    return LerpColor(green, yellow, (speed_ratio - 0.33f) / 0.33f);
+    float t = (speed_ratio - 0.33f) / 0.33f;
+    return LerpColor(entities::particle_mid_low_color,
+                     entities::particle_mid_high_color, t);
   } else {
-    return LerpColor(yellow, red, (speed_ratio - 0.66f) / 0.34f);
+    float t = (speed_ratio - 0.66f) / 0.34f;
+    return LerpColor(entities::particle_mid_high_color,
+                     entities::particle_high_color, t);
   }
 }
 
@@ -518,16 +519,19 @@ inline Color SpeedToColor(float speed) {
                  LerpChannel(c1.b, c2.b, factor), 255};
   };
 
-  constexpr Color blue = {0, 120, 255, 255};
-  constexpr Color green = {0, 255, 120, 255};
-  constexpr Color yellow = {255, 220, 0, 255};
-  constexpr Color red = {255, 50, 50, 255};
-
-  if (speed_ratio < 0.33f) return BlendColor(blue, green, speed_ratio / 0.33f);
-  if (speed_ratio < 0.66f)
-    return BlendColor(green, yellow, (speed_ratio - 0.33f) / 0.33f);
-
-  return BlendColor(yellow, red, (speed_ratio - 0.66f) / 0.34f);
+  if (speed_ratio < 0.33f) {
+    float t = speed_ratio / 0.33f;
+    return BlendColor(entities::particle_low_color,
+                      entities::particle_mid_low_color, t);
+  } else if (speed_ratio < 0.66f) {
+    float t = (speed_ratio - 0.33f) / 0.33f;
+    return BlendColor(entities::particle_mid_low_color,
+                      entities::particle_mid_high_color, t);
+  } else {
+    float t = (speed_ratio - 0.66f) / 0.34f;
+    return BlendColor(entities::particle_mid_high_color,
+                      entities::particle_high_color, t);
+  }
 }
 
 inline void RenderFluid(ECS& ecs,
@@ -544,12 +548,12 @@ inline void RenderFluid(ECS& ecs,
       if (selected && entities::selection_locked) {
         DrawCircleV(pos.position, c.radius * 1.5f, WHITE);
         if (entities::render_particle_velocity)
-          RenderArrow(pos.position, vel.velocity, c.radius * 1.5f, RED, 0.5f);
+          RenderArrow(pos.position, vel.velocity, c.radius * 1.5f, RED, 0.25f);
       } else {
         DrawCircleV(pos.position, c.radius, particle_color);
         if (entities::render_particle_velocity)
           RenderArrow(pos.position, vel.velocity, c.radius, particle_color,
-                      0.5f);
+                      0.25f);
       }
     });
 

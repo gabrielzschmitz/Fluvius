@@ -61,6 +61,11 @@ inline Color pressure_low_color = {0, 0, 128, 130};      // blue
 inline Color pressure_mid_color = {255, 255, 255, 130};  // white
 inline Color pressure_high_color = {255, 50, 50, 130};   // red
 
+inline Color particle_low_color = {0, 120, 255, 190};       // blue
+inline Color particle_mid_low_color = {0, 255, 255, 190};   // cyan
+inline Color particle_mid_high_color = {255, 220, 0, 180};  // yellow
+inline Color particle_high_color = {255, 50, 50, 160};      // red
+
 inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
                         bool centered = false) {
   fluid_particles.clear();
