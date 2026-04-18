@@ -189,7 +189,7 @@ inline void CreateUI(engine::ECS& ecs) {
                       [](float value) { surface_tension = value; }});
 
   ecs.add<engine::components::UITooltipComponent>(
-    tension_slider, "Controls water surface tension.");
+    tension_slider, "Controls fluid surface tension.");
 
   ecs.add<engine::components::UIGroupChildComponent>(tension_slider,
                                                      physics_group);
