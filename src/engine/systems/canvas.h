@@ -36,9 +36,12 @@ inline Vector2 CanvasLocalToWorld(const Vector2& local_pos,
 inline void UpdateCanvasInteraction(ECS& ecs,
                                     const components::CameraComponent& cam) {
   static Vector2 last_mouse_screen{0, 0};
+  static Vector2 last_mouse_world{0, 0};
 
   Vector2 mouse_screen = GetMousePosition();
   Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, cam.camera);
+
+  Vector2 prev_mouse_world = last_mouse_world;
 
   Vector2 mouse_delta{0, 0};
   if (last_mouse_screen.x != 0 || last_mouse_screen.y != 0) {
@@ -46,6 +49,7 @@ inline void UpdateCanvasInteraction(ECS& ecs,
     mouse_delta.y = mouse_screen.y - last_mouse_screen.y;
   }
   last_mouse_screen = mouse_screen;
+  last_mouse_world = mouse_world;
 
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
@@ -105,20 +109,16 @@ if (near_corner) {
       }
 
       if (canvas.dragging_edge != components::CanvasComponent::Edge::EdgeNone) {
-        Vector2 world_delta =
-          GetScreenToWorld2D({mouse_delta.x, mouse_delta.y}, cam.camera) -
-          GetScreenToWorld2D({0, 0}, cam.camera);
-
-        world_delta = {-world_delta.x, -world_delta.y};
+        Vector2 world_delta = mouse_world - prev_mouse_world;
 
         switch (canvas.dragging_edge) {
           case components::CanvasComponent::Edge::Left:
           case components::CanvasComponent::Edge::Right:
-            canvas.position.x += world_delta.x * drag_sensitivity();
+            canvas.position.x += world_delta.x;
             break;
           case components::CanvasComponent::Edge::Top:
           case components::CanvasComponent::Edge::Bottom:
-            canvas.position.y += world_delta.y * drag_sensitivity();
+            canvas.position.y += world_delta.y;
             break;
           default:
             break;

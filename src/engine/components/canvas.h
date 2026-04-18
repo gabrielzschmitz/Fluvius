@@ -30,7 +30,7 @@ struct CanvasComponent {
   Corner dragging_corner = Corner::CornerNone;
 
   float handle_radius = 8.f;
-  float edge_tolerance = 10.f;
+  float edge_tolerance = 20.f;
 
   CanvasComponent() = default;
 
