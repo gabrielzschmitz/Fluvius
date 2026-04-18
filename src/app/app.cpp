@@ -1,16 +1,17 @@
 // app/app.cpp
 #include "app/app.h"
 
-#include "app/app_helpers.h"
 #include "app/app_state.h"
 #include "engine/globals.h"
 #include "engine/logger.h"
 #include "engine/systems/camera.h"
 #include "engine/systems/physics.h"
 #include "engine/systems/ui.h"
+#include "engine/systems/canvas.h"
 #include "entities/camera.h"
 #include "entities/fluid.h"
 #include "entities/ui.h"
+#include "entities/canvas.h"
 #include "raylib.h"
 #include "resource_dir.h"
 
@@ -26,7 +27,8 @@ static void InitApp(m_app::AppState& state) {
   defaultFont = LoadFont("fonts/simple-font.png");
 
   state.cameraEntity = m_ett::CreateCamera(state.ecs);
-  state.bgTexture = m_app::CreateBackgroundTexture();
+
+  state.canvasEntity = m_ett::CreateCanvas(state.ecs);
 
   m_ett::CreateFluid(state.ecs, PARTICLE_NUMBER,
                      motrix::entities::create_centered);
@@ -36,10 +38,12 @@ static void InitApp(m_app::AppState& state) {
 }
 
 static void UpdateApp(m_app::AppState& state, float dt) {
-  m_eng::systems::SimulateFluid(state.ecs, dt);
-
   auto& cam =
     state.ecs.get<m_eng::components::CameraComponent>(state.cameraEntity);
+  m_eng::systems::UpdateCanvasInteraction(state.ecs, cam);
+
+  m_eng::systems::SimulateFluid(state.ecs, dt);
+
   m_eng::systems::UpdateSelectionInput(state.ecs, cam);
 
   m_eng::systems::UpdateSelectionDensity(state.ecs);
@@ -51,11 +55,13 @@ static void UpdateApp(m_app::AppState& state, float dt) {
 static void RenderApp(m_app::AppState& state) {
   BeginDrawing();
 
+  ClearBackground({1, 87, 87, 255});
+
   auto& cam =
     state.ecs.get<m_eng::components::CameraComponent>(state.cameraEntity);
   BeginMode2D(cam.camera);
 
-  m_app::RenderBackground(state.bgTexture, cam);
+  m_eng::systems::RenderCanvas(state.ecs, cam);
 
   if (motrix::entities::render_fluid_surface)
     m_eng::systems::RenderFluidSurface(state.ecs, cam);
@@ -100,7 +106,6 @@ int RunApp(int argc, char** argv) {
     RenderApp(state);
   }
 
-  UnloadRenderTexture(state.bgTexture);
   UnloadFont(defaultFont);
   CloseWindow();
 

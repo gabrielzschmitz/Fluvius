@@ -8,7 +8,7 @@ namespace motrix::app {
 
 struct AppState {
   motrix::engine::Entity cameraEntity{0};
-  RenderTexture2D bgTexture{};
+  motrix::engine::Entity canvasEntity{0};
   engine::ECS ecs;
 };
 

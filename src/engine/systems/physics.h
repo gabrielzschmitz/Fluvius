@@ -8,8 +8,10 @@
 
 #include "../../entities/fluid.h"
 #include "../components/camera.h"
+#include "../components/canvas.h"
 #include "../components/physics.h"
 #include "../ecs/ecs.h"
+#include "../systems/canvas.h"
 #include "../systems/ui_helpers.h"
 #include "entities/fluid.h"
 #include "raylib.h"
@@ -972,45 +974,43 @@ inline void RenderMouseSelectionCircle(const components::CameraComponent& cam) {
  * ============================================================================
  */
 inline void ResolveCollisions(ECS& ecs) {
-  const float damping = entities::bounce_enabled ? 0.5f : 0.f;
-  const float base_repulsion = 100.f;
+  const float base_repulsion = 250.f;
   const float particle_repulsion = 0.05f;
-  const float boundary_margin = 10.f;
 
-  ecs.group_view<components::PositionComponent, components::VelocityComponent,
-                 components::CircleComponent>(
-    [&](Entity, components::PositionComponent& pos,
-        components::VelocityComponent& vel, components::CircleComponent& c) {
-      Vector2 correction{0.f, 0.f};
+  ecs.group_view<components::CanvasComponent>(
+    [&](Entity, components::CanvasComponent& canvas) {
+      ecs
+        .group_view<components::PositionComponent,
+                    components::VelocityComponent, components::CircleComponent>(
+          [&](Entity, components::PositionComponent& pos,
+              components::VelocityComponent& vel,
+              components::CircleComponent& c) {
+            Vector2 local_pos = WorldToCanvasLocal(pos.position, canvas);
 
-      if (pos.position.x - c.radius < boundary_margin) {
-        float penetration = boundary_margin - (pos.position.x - c.radius);
-        correction.x += penetration * base_repulsion / boundary_margin;
-      }
-      if (pos.position.x + c.radius > CANVAS_W - boundary_margin) {
-        float penetration =
-          (pos.position.x + c.radius) - (CANVAS_W - boundary_margin);
-        correction.x -= penetration * base_repulsion / boundary_margin;
-      }
-      if (pos.position.y - c.radius < boundary_margin) {
-        float penetration = boundary_margin - (pos.position.y - c.radius);
-        correction.y += penetration * base_repulsion / boundary_margin;
-      }
-      if (pos.position.y + c.radius > CANVAS_H - boundary_margin) {
-        float penetration =
-          (pos.position.y + c.radius) - (CANVAS_H - boundary_margin);
-        correction.y -= penetration * base_repulsion / boundary_margin;
-      }
+            float hx = canvas.half_extents.x - c.radius;
+            float hy = canvas.half_extents.y - c.radius;
 
-      float speed = Vector2Length(vel.velocity);
-      float factor = 1.f + speed * 0.05f;
-      vel.velocity.x += correction.x * factor * (1.f / 120.f);
-      vel.velocity.y += correction.y * factor * (1.f / 120.f);
+            bool was_outside = local_pos.x < -hx || local_pos.x > hx ||
+                               local_pos.y < -hy || local_pos.y > hy;
 
-      pos.position.x =
-        std::clamp(pos.position.x, c.radius, CANVAS_W - c.radius);
-      pos.position.y =
-        std::clamp(pos.position.y, c.radius, CANVAS_H - c.radius);
+            if (was_outside) {
+              local_pos.x = std::clamp(local_pos.x, -hx, hx);
+              local_pos.y = std::clamp(local_pos.y, -hy, hy);
+
+              Vector2 corrected_world = CanvasLocalToWorld(local_pos, canvas);
+              pos.position.x = corrected_world.x;
+              pos.position.y = corrected_world.y;
+
+              if (entities::bounce_enabled) {
+                float speed = Vector2Length(vel.velocity);
+                if (speed > 10.f) {
+                  float damp = 0.95f;
+                  vel.velocity.x *= damp;
+                  vel.velocity.y *= damp;
+                }
+              }
+            }
+          });
     });
 
   struct ParticleRef {
