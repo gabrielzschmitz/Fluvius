@@ -109,33 +109,37 @@ if (near_corner) {
       }
 
       if (canvas.dragging_edge != components::CanvasComponent::Edge::EdgeNone) {
-        Vector2 world_delta = mouse_world - prev_mouse_world;
+        if (!entities::is_paused) {
+          Vector2 world_delta = mouse_world - prev_mouse_world;
 
-        switch (canvas.dragging_edge) {
-          case components::CanvasComponent::Edge::Left:
-          case components::CanvasComponent::Edge::Right:
-            canvas.position.x += world_delta.x;
-            break;
-          case components::CanvasComponent::Edge::Top:
-          case components::CanvasComponent::Edge::Bottom:
-            canvas.position.y += world_delta.y;
-            break;
-          default:
-            break;
+          switch (canvas.dragging_edge) {
+            case components::CanvasComponent::Edge::Left:
+            case components::CanvasComponent::Edge::Right:
+              canvas.position.x += world_delta.x;
+              break;
+            case components::CanvasComponent::Edge::Top:
+            case components::CanvasComponent::Edge::Bottom:
+              canvas.position.y += world_delta.y;
+              break;
+            default:
+              break;
+          }
         }
       }
 
       if (canvas.dragging_corner !=
           components::CanvasComponent::Corner::CornerNone) {
-        float dx = mouse_world.x - canvas.position.x;
-        float dy = mouse_world.y - canvas.position.y;
-        float angle = std::atan2(dy, dx);
+        if (!entities::is_paused) {
+          float dx = mouse_world.x - canvas.position.x;
+          float dy = mouse_world.y - canvas.position.y;
+          float angle = std::atan2(dy, dx);
 
-        float delta_angle = angle - canvas.initial_mouse_angle;
+          float delta_angle = angle - canvas.initial_mouse_angle;
 
-        if (std::abs(delta_angle) > 0.001f) {
-          canvas.rotation = canvas.prev_rotation + delta_angle;
-          canvas.rotation_dirty = true;
+          if (std::abs(delta_angle) > 0.001f) {
+            canvas.rotation = canvas.prev_rotation + delta_angle;
+            canvas.rotation_dirty = true;
+          }
         }
       }
 
