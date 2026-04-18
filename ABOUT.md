@@ -33,12 +33,28 @@ simulation:
 Multiple visualization options for the fluid:
 
 - **Particle rendering** - Individual particles colored by velocity (blue →
-  green → yellow → red gradient)
-- **Fluid surface** - Field-based surface reconstruction with alpha blending
-- **Marching squares** - Contour line extraction for fluid boundaries
+  cyan → yellow → red gradient)
 - **Filled marching squares** - Solid fill with speed-based color mapping
 - **Pressure field** - Visualize pressure distribution across particles (blue =
   low, white = mid, red = high)
+
+### Particle Color Customization
+
+Customize particle colors via UI dropdowns:
+
+- **Low** - Color for slow particles (default: blue)
+- **Mid-Low** - Color for mid-low velocity particles (default: cyan)
+- **Mid-High** - Color for mid-high velocity particles (default: yellow)
+- **High** - Color for fast particles (default: red)
+
+### Canvas Transformation
+
+The simulation canvas supports transformations:
+
+- **Position** - Canvas can be moved anywhere on screen
+- **Rotation** - Canvas can be rotated in 15° increments
+- **Spatial grid optimization** - Fluid rendering now respects canvas position and
+  rotation, ensuring correct rendering even when canvas is moved or rotated
 
 ### Entity-Component System (Motrix)
 
@@ -83,6 +99,15 @@ Direct manipulation of fluid particles:
 - **Selection visualization** - Highlighted particle with velocity arrow
 - **Density inspection** - View particle density values in real-time
 - **Right-click reset** - Clear selection
+
+### Canvas Transformation
+
+The simulation canvas supports transformations:
+
+- **Position** - Canvas can be moved anywhere on screen
+- **Rotation** - Canvas can be rotated in 15° increments
+- **Spatial grid optimization** - Fluid rendering now respects canvas position and
+  rotation, ensuring correct rendering even when canvas is moved or rotated
 
 ---
 
