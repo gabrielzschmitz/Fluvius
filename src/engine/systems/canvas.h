@@ -50,7 +50,6 @@ inline void UpdateCanvasInteraction(ECS& ecs,
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
       canvas.prev_position = canvas.position;
-      canvas.prev_rotation = canvas.rotation;
     });
 
   ecs.group_view<components::CanvasComponent>(
@@ -74,16 +73,20 @@ inline void UpdateCanvasInteraction(ECS& ecs,
         (touching_left || touching_right) && (touching_top || touching_bottom);
 
       if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-        if (near_corner) {
-          if (touching_left && touching_top)
-            canvas.dragging_corner = components::CanvasComponent::Corner::TL;
-          else if (touching_right && touching_top)
-            canvas.dragging_corner = components::CanvasComponent::Corner::TR;
-          else if (touching_left && touching_bottom)
-            canvas.dragging_corner = components::CanvasComponent::Corner::BL;
-          else if (touching_right && touching_bottom)
-            canvas.dragging_corner = components::CanvasComponent::Corner::BR;
-        } else if (touching_left) {
+if (near_corner) {
+        if (touching_left && touching_top)
+          canvas.dragging_corner = components::CanvasComponent::Corner::TL;
+        else if (touching_right && touching_top)
+          canvas.dragging_corner = components::CanvasComponent::Corner::TR;
+        else if (touching_left && touching_bottom)
+          canvas.dragging_corner = components::CanvasComponent::Corner::BL;
+        else if (touching_right && touching_bottom)
+          canvas.dragging_corner = components::CanvasComponent::Corner::BR;
+
+        float dx = mouse_world.x - canvas.position.x;
+        float dy = mouse_world.y - canvas.position.y;
+        canvas.initial_mouse_angle = std::atan2(dy, dx);
+      } else if (touching_left) {
           canvas.dragging_edge = components::CanvasComponent::Edge::Left;
         } else if (touching_right) {
           canvas.dragging_edge = components::CanvasComponent::Edge::Right;
@@ -98,6 +101,7 @@ inline void UpdateCanvasInteraction(ECS& ecs,
         canvas.dragging_edge = components::CanvasComponent::Edge::EdgeNone;
         canvas.dragging_corner =
           components::CanvasComponent::Corner::CornerNone;
+        canvas.prev_rotation = canvas.rotation;
       }
 
       if (canvas.dragging_edge != components::CanvasComponent::Edge::EdgeNone) {
@@ -127,10 +131,12 @@ inline void UpdateCanvasInteraction(ECS& ecs,
         float dy = mouse_world.y - canvas.position.y;
         float angle = std::atan2(dy, dx);
 
-        float snapped = std::round(angle / rotation_snap_increment()) *
-                        rotation_snap_increment();
-        canvas.rotation = snapped;
-        canvas.rotation_dirty = true;
+        float delta_angle = angle - canvas.initial_mouse_angle;
+
+        if (std::abs(delta_angle) > 0.001f) {
+          canvas.rotation = canvas.prev_rotation + delta_angle;
+          canvas.rotation_dirty = true;
+        }
       }
 
       if (!IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {

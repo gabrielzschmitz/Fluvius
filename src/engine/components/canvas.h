@@ -21,6 +21,8 @@ struct CanvasComponent {
 
   bool rotation_dirty = true;
 
+  float initial_mouse_angle = 0.f;
+
   enum Edge { EdgeNone = 0, Left, Right, Top, Bottom };
   enum Corner { CornerNone = 0, TL, TR, BL, BR };
 
