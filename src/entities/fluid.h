@@ -52,6 +52,7 @@ inline float sim_speed = 1.0f;
 inline float target_density = 0.000425f;
 inline float pressure_multiplier = 250.f;
 inline float viscosity = 0.8f;
+inline float surface_tension = 0.25f;
 inline float particle_size =
   Clamp(2.0f * std::pow(1000.0f / static_cast<float>(PARTICLE_NUMBER), 0.4f),
         0.5f, 3.0f);

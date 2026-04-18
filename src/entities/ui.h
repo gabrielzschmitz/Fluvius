@@ -167,6 +167,28 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      physics_group);
 
   //
+  // Surface tension slider
+  //
+  engine::Entity tension_slider = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    tension_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(tension_slider);
+
+  ecs.add<engine::components::UISliderComponent>(
+    tension_slider, engine::components::UISliderComponent{
+                      "Tension", &surface_tension, 0.f, 5.f, 0.05f,
+                      [](float value) { surface_tension = value; }});
+
+  ecs.add<engine::components::UITooltipComponent>(
+    tension_slider, "Controls water surface tension.");
+
+  ecs.add<engine::components::UIGroupChildComponent>(tension_slider,
+                                                     physics_group);
+
+  //
   // Bounce checkbox
   //
   engine::Entity checkbox = ecs.create_entity();

@@ -264,11 +264,18 @@ inline void ComputeParticlePressure(ECS& ecs) {
  * ============================================================================
  */
 
+inline float CohesionKernel(float r, float h) {
+  if (r >= h * 0.5f) return 0.f;
+  float q = r / (h * 0.5f);
+  return (1.f - q) * (1.f - q);
+}
+
 inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
   float h = entities::smoothing_radius;
   float h2 = h * h;
   float mass = entities::particle_size;
   float viscosity = entities::viscosity;
+  float surface_tension = entities::surface_tension;
 
   for (size_t i = 0; i < particle_entities.size(); ++i) {
     Entity e1 = particle_entities[i];
@@ -281,6 +288,7 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
 
     Vector2 pressure_force{0.f, 0.f};
     Vector2 viscosity_force{0.f, 0.f};
+    Vector2 cohesion_force{0.f, 0.f};
 
     for (int dx = -1; dx <= 1; ++dx) {
       for (int dy = -1; dy <= 1; ++dy) {
@@ -324,6 +332,10 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
 
           viscosity_force.x += (v2.velocity.x - v1.velocity.x) * visc;
           viscosity_force.y += (v2.velocity.y - v1.velocity.y) * visc;
+
+          float cohes = CohesionKernel(r, h);
+          cohesion_force.x += dir.x * cohes;
+          cohesion_force.y += dir.y * cohes;
         }
       }
     }
@@ -333,6 +345,9 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
 
     v1.velocity.x += viscosity_force.x * viscosity;
     v1.velocity.y += viscosity_force.y * viscosity;
+
+    v1.velocity.x += cohesion_force.x * surface_tension * mass;
+    v1.velocity.y += cohesion_force.y * surface_tension * mass;
   }
 }
 
