@@ -357,6 +357,32 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
  * ============================================================================
  */
 
+inline bool IsMouseOverCanvas(ECS& ecs, Vector2 mouse_world) {
+  bool over_canvas = false;
+  ecs.group_view<components::CanvasComponent>(
+    [&](Entity, components::CanvasComponent& canvas) {
+      Vector2 local_mouse = WorldToCanvasLocal(mouse_world, canvas);
+
+      bool touching_left =
+        local_mouse.x >= -canvas.half_extents.x - canvas.edge_tolerance &&
+        local_mouse.x <= -canvas.half_extents.x + canvas.edge_tolerance;
+      bool touching_right =
+        local_mouse.x >= canvas.half_extents.x - canvas.edge_tolerance &&
+        local_mouse.x <= canvas.half_extents.x + canvas.edge_tolerance;
+      bool touching_top =
+        local_mouse.y >= -canvas.half_extents.y - canvas.edge_tolerance &&
+        local_mouse.y <= -canvas.half_extents.y + canvas.edge_tolerance;
+      bool touching_bottom =
+        local_mouse.y >= canvas.half_extents.y - canvas.edge_tolerance &&
+        local_mouse.y <= canvas.half_extents.y + canvas.edge_tolerance;
+
+      if (touching_left || touching_right || touching_top || touching_bottom) {
+        over_canvas = true;
+      }
+    });
+  return over_canvas;
+}
+
 inline void UpdateSelectionInput(
   ECS& ecs, const engine::components::CameraComponent& cam) {
   if (!entities::selection_active) return;
@@ -367,6 +393,12 @@ inline void UpdateSelectionInput(
   if (UIConsumesMouse(ecs, mouse_screen) ||
       IsMouseOverAnyWindow(ecs, mouse_screen))
     return;
+
+  if (IsMouseOverCanvas(ecs, mouse_world)) {
+    entities::selection_locked = false;
+    entities::selection_density = 0.f;
+    return;
+  }
 
   if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
     entities::selection_center = mouse_world;

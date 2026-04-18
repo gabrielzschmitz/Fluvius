@@ -112,18 +112,8 @@ if (near_corner) {
         if (!entities::is_paused) {
           Vector2 world_delta = mouse_world - prev_mouse_world;
 
-          switch (canvas.dragging_edge) {
-            case components::CanvasComponent::Edge::Left:
-            case components::CanvasComponent::Edge::Right:
-              canvas.position.x += world_delta.x;
-              break;
-            case components::CanvasComponent::Edge::Top:
-            case components::CanvasComponent::Edge::Bottom:
-              canvas.position.y += world_delta.y;
-              break;
-            default:
-              break;
-          }
+          canvas.position.x += world_delta.x;
+          canvas.position.y += world_delta.y;
         }
       }
 
