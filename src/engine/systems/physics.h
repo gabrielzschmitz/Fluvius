@@ -266,7 +266,7 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
   float h = entities::smoothing_radius;
   float h2 = h * h;
   float mass = entities::particle_size;
-  float viscosity = 0.08f;
+  float viscosity = entities::viscosity;
 
   for (size_t i = 0; i < particle_entities.size(); ++i) {
     Entity e1 = particle_entities[i];
@@ -499,7 +499,8 @@ inline void RenderFluid(ECS& ecs,
       } else {
         DrawCircleV(pos.position, c.radius, particle_color);
         if (entities::render_particle_velocity)
-          RenderArrow(pos.position, vel.velocity, c.radius, RED, 0.5f);
+          RenderArrow(pos.position, vel.velocity, c.radius, particle_color,
+                      0.5f);
       }
     });
 
@@ -1006,8 +1007,10 @@ inline void ResolveCollisions(ECS& ecs) {
       vel.velocity.x += correction.x * factor * (1.f / 120.f);
       vel.velocity.y += correction.y * factor * (1.f / 120.f);
 
-      pos.position.x = std::clamp(pos.position.x, c.radius, CANVAS_W - c.radius);
-      pos.position.y = std::clamp(pos.position.y, c.radius, CANVAS_H - c.radius);
+      pos.position.x =
+        std::clamp(pos.position.x, c.radius, CANVAS_W - c.radius);
+      pos.position.y =
+        std::clamp(pos.position.y, c.radius, CANVAS_H - c.radius);
     });
 
   struct ParticleRef {

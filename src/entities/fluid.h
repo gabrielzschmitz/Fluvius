@@ -35,12 +35,12 @@ inline Vector2 selection_center = {0.f, 0.f};
 inline bool selection_locked = false;
 inline engine::Entity selected_particle{};
 
-inline bool render_fluid_surface = true;
-inline bool render_fluid_filled = true;
+inline bool render_fluid_surface = false;
+inline bool render_fluid_filled = false;
 inline bool render_marching_squares = false;
 inline bool render_pressure_field = false;
 inline bool render_fluid_particles = true;
-inline bool render_particle_velocity = false;
+inline bool render_particle_velocity = true;
 
 inline float gravity = 1.0f;
 inline bool create_centered = 1.0f;
@@ -51,6 +51,7 @@ inline float sim_speed = 1.0f;
 
 inline float target_density = 0.000425f;
 inline float pressure_multiplier = 250.f;
+inline float viscosity = 0.8f;
 inline float particle_size =
   Clamp(2.0f * std::pow(1000.0f / static_cast<float>(PARTICLE_NUMBER), 0.4f),
         0.5f, 3.0f);
@@ -109,8 +110,9 @@ inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
     while (created < particle_count && attempts < max_attempts) {
       ++attempts;
 
-      Vector2 pos{static_cast<float>(GetRandomValue(radius, CANVAS_W - radius)),
-                  static_cast<float>(GetRandomValue(radius, CANVAS_H - radius))};
+      Vector2 pos{
+        static_cast<float>(GetRandomValue(radius, CANVAS_W - radius)),
+        static_cast<float>(GetRandomValue(radius, CANVAS_H - radius))};
 
       bool valid = true;
       for (const auto& other : placed_positions) {

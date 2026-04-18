@@ -145,6 +145,28 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      physics_group);
 
   //
+  // Viscosity slider
+  //
+  engine::Entity viscosity_slider = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    viscosity_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(viscosity_slider);
+
+  ecs.add<engine::components::UISliderComponent>(
+    viscosity_slider, engine::components::UISliderComponent{
+                        "Viscosity", &viscosity, 0.1f, 20.f, 0.1f,
+                        [](float value) { viscosity = value; }});
+
+  ecs.add<engine::components::UITooltipComponent>(viscosity_slider,
+                                                  "Controls fluid viscosity.");
+
+  ecs.add<engine::components::UIGroupChildComponent>(viscosity_slider,
+                                                     physics_group);
+
+  //
   // Bounce checkbox
   //
   engine::Entity checkbox = ecs.create_entity();
