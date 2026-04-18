@@ -5,13 +5,13 @@
 #include "engine/globals.h"
 #include "engine/logger.h"
 #include "engine/systems/camera.h"
+#include "engine/systems/canvas.h"
 #include "engine/systems/physics.h"
 #include "engine/systems/ui.h"
-#include "engine/systems/canvas.h"
 #include "entities/camera.h"
+#include "entities/canvas.h"
 #include "entities/fluid.h"
 #include "entities/ui.h"
-#include "entities/canvas.h"
 #include "raylib.h"
 #include "resource_dir.h"
 
@@ -63,14 +63,8 @@ static void RenderApp(m_app::AppState& state) {
 
   m_eng::systems::RenderCanvas(state.ecs, cam);
 
-  if (motrix::entities::render_fluid_surface)
-    m_eng::systems::RenderFluidSurface(state.ecs, cam);
-
   if (motrix::entities::render_fluid_filled)
     m_eng::systems::RenderFluidFilled(state.ecs, cam);
-
-  if (motrix::entities::render_marching_squares)
-    m_eng::systems::RenderFluidMarchingSquares(state.ecs, cam);
 
   if (motrix::entities::render_pressure_field)
     m_eng::systems::RenderPressureField(state.ecs, cam);

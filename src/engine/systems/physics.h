@@ -572,195 +572,6 @@ inline void RenderPressureField(
   EndMode2D();
 }
 
-inline void RenderFluidSurface(ECS& ecs,
-                               const engine::components::CameraComponent& cam) {
-  BeginMode2D(cam.camera);
-
-  constexpr int cell_size = 6;
-
-  int grid_w = (CANVAS_W + cell_size - 1) / cell_size;
-  int grid_h = (CANVAS_H + cell_size - 1) / cell_size;
-
-  static std::vector<float> field(grid_w * grid_h);
-
-  std::fill(field.begin(), field.end(), 0.f);
-
-  constexpr float radius = 20.f;
-  constexpr float radius_sq = radius * radius;
-
-  auto CellIndex = [&](int x, int y) { return y * grid_w + x; };
-
-  ecs.group_view<components::PositionComponent, components::VelocityComponent,
-                 components::CircleComponent>(
-    [&](Entity, components::PositionComponent& pos,
-        components::VelocityComponent& vel, components::CircleComponent&) {
-      int gx = static_cast<int>(pos.position.x / cell_size);
-      int gy = static_cast<int>(pos.position.y / cell_size);
-
-      int reach = static_cast<int>(radius / cell_size) + 1;
-
-      for (int oy = -reach; oy <= reach; ++oy) {
-        for (int ox = -reach; ox <= reach; ++ox) {
-          int nx = gx + ox;
-          int ny = gy + oy;
-
-          if (nx < 0 || nx >= grid_w || ny < 0 || ny >= grid_h) continue;
-
-          float px = nx * cell_size + cell_size * 0.5f;
-          float py = ny * cell_size + cell_size * 0.5f;
-
-          float dx = px - pos.position.x;
-          float dy = py - pos.position.y;
-
-          float dist_sq = dx * dx + dy * dy;
-
-          field[CellIndex(nx, ny)] += FluidFieldKernel(dist_sq, radius_sq);
-        }
-      }
-    });
-
-  constexpr float threshold = 0.7f;
-
-  for (int y = 0; y < grid_h; ++y) {
-    for (int x = 0; x < grid_w; ++x) {
-      float v = field[CellIndex(x, y)];
-
-      if (v < threshold) continue;
-
-      float alpha = Clamp((v - threshold) * 255.f, 80.f, 220.f);
-
-      DrawRectangle(x * cell_size - 1, y * cell_size, cell_size, cell_size,
-                    Color{40, 140, 255, static_cast<unsigned char>(alpha)});
-    }
-  }
-
-  EndMode2D();
-}
-
-inline void RenderFluidMarchingSquares(
-  ECS& ecs, const engine::components::CameraComponent& cam) {
-  BeginMode2D(cam.camera);
-
-  float line_thickness = 2.f;
-  constexpr int cell_size = 5;
-
-  int grid_w = CANVAS_W / cell_size + 2;
-  int grid_h = CANVAS_H / cell_size + 1;
-
-  static std::vector<float> field(grid_w * grid_h);
-  std::fill(field.begin(), field.end(), 0.f);
-
-  constexpr float radius = 20.f;
-  constexpr float radius_sq = radius * radius;
-  constexpr float threshold = 0.5f;
-
-  auto CellIndex = [&](int x, int y) { return y * grid_w + x; };
-
-  /**
-     * Build scalar field
-     */
-  ecs.group_view<components::PositionComponent, components::CircleComponent>(
-    [&](Entity, components::PositionComponent& pos,
-        components::CircleComponent&) {
-      int gx = static_cast<int>(pos.position.x / cell_size);
-      int gy = static_cast<int>(pos.position.y / cell_size);
-
-      int reach = static_cast<int>(radius / cell_size) + 1;
-
-      for (int oy = -reach; oy <= reach; ++oy) {
-        for (int ox = -reach; ox <= reach; ++ox) {
-          int nx = gx + ox;
-          int ny = gy + oy;
-
-          if (nx < 0 || nx >= grid_w || ny < 0 || ny >= grid_h) continue;
-
-          float px = nx * cell_size;
-          float py = ny * cell_size;
-
-          float dx = px - pos.position.x;
-          float dy = py - pos.position.y;
-
-          float dist_sq = dx * dx + dy * dy;
-          float influence = FluidFieldKernel(dist_sq, radius_sq);
-
-          field[CellIndex(nx, ny)] += influence;
-        }
-      }
-    });
-
-  /**
-     * Marching squares contour extraction
-     */
-  for (int y = 0; y < grid_h - 1; ++y) {
-    for (int x = 0; x < grid_w - 1; ++x) {
-      float v0 = field[CellIndex(x, y)];
-      float v1 = field[CellIndex(x + 1, y)];
-      float v2 = field[CellIndex(x + 1, y + 1)];
-      float v3 = field[CellIndex(x, y + 1)];
-
-      int state = 0;
-      if (v0 > threshold) state |= 1;
-      if (v1 > threshold) state |= 2;
-      if (v2 > threshold) state |= 4;
-      if (v3 > threshold) state |= 8;
-
-      if (state == 0 || state == 15) continue;
-
-      float offset_x = 2.0f;
-      Vector2 p0{float(x * cell_size) - offset_x, float(y * cell_size)};
-      Vector2 p1{float((x + 1) * cell_size) - offset_x, float(y * cell_size)};
-      Vector2 p2{float((x + 1) * cell_size) - offset_x,
-                 float((y + 1) * cell_size)};
-      Vector2 p3{float(x * cell_size) - offset_x, float((y + 1) * cell_size)};
-
-      Vector2 a = InterpolateEdge(p0, p1, v0, v1, threshold);
-      Vector2 b = InterpolateEdge(p1, p2, v1, v2, threshold);
-      Vector2 c = InterpolateEdge(p2, p3, v2, v3, threshold);
-      Vector2 d = InterpolateEdge(p3, p0, v3, v0, threshold);
-
-      Color color = {200, 200, 200, 180};
-
-      // Draw thicker lines
-      switch (state) {
-        case 1:
-        case 14:
-          DrawLineEx(d, a, line_thickness, color);
-          break;
-        case 2:
-        case 13:
-          DrawLineEx(a, b, line_thickness, color);
-          break;
-        case 3:
-        case 12:
-          DrawLineEx(d, b, line_thickness, color);
-          break;
-        case 4:
-        case 11:
-          DrawLineEx(b, c, line_thickness, color);
-          break;
-        case 5:
-          DrawLineEx(d, c, line_thickness, color);
-          DrawLineEx(a, b, line_thickness, color);
-          break;
-        case 6:
-        case 9:
-          DrawLineEx(a, c, line_thickness, color);
-          break;
-        case 7:
-        case 8:
-          DrawLineEx(d, c, line_thickness, color);
-          break;
-        case 10:
-          DrawLineEx(a, d, line_thickness, color);
-          DrawLineEx(b, c, line_thickness, color);
-          break;
-      }
-    }
-  }
-
-  EndMode2D();
-}
-
 inline void DrawTriangleCCW(Vector2 v1, Vector2 v2, Vector2 v3, Color color) {
   // Compute signed area to enforce CCW (optional, keeps winding consistent)
   float area = (v2.x - v1.x) * (v3.y - v1.y) - (v3.x - v1.x) * (v2.y - v1.y);
@@ -782,6 +593,17 @@ inline void RenderFluidFilled(ECS& ecs,
                               const engine::components::CameraComponent& cam) {
   BeginMode2D(cam.camera);
 
+  components::CanvasComponent* canvas_ptr = nullptr;
+  ecs.group_view<components::CanvasComponent>(
+    [&](Entity, components::CanvasComponent& canvas) { canvas_ptr = &canvas; });
+
+  if (!canvas_ptr) {
+    EndMode2D();
+    return;
+  }
+
+  auto& canvas = *canvas_ptr;
+
   constexpr int cell_size = 5;
 
   int grid_w = (CANVAS_W + cell_size + 2) / cell_size;
@@ -798,6 +620,11 @@ inline void RenderFluidFilled(ECS& ecs,
   constexpr float threshold = 0.5f;
 
   auto CellIndex = [&](int x, int y) { return y * grid_w + x; };
+  float he_x = canvas.half_extents.x;
+  float he_y = canvas.half_extents.y;
+  auto LocalToWorld = [&](float lx, float ly) {
+    return CanvasLocalToWorld({lx, ly}, canvas);
+  };
 
   /**
    * Build scalar + weighted speed field
@@ -806,8 +633,9 @@ inline void RenderFluidFilled(ECS& ecs,
                  components::CircleComponent>(
     [&](Entity, components::PositionComponent& pos,
         components::VelocityComponent& vel, components::CircleComponent&) {
-      int gx = static_cast<int>(pos.position.x / cell_size);
-      int gy = static_cast<int>(pos.position.y / cell_size);
+      Vector2 local_pos = WorldToCanvasLocal(pos.position, canvas);
+      int gx = static_cast<int>((local_pos.x + he_x) / cell_size);
+      int gy = static_cast<int>((local_pos.y + he_y) / cell_size);
 
       int reach = static_cast<int>(radius / cell_size) + 1;
 
@@ -820,11 +648,11 @@ inline void RenderFluidFilled(ECS& ecs,
 
           if (nx < 0 || nx >= grid_w || ny < 0 || ny >= grid_h) continue;
 
-          float px = nx * cell_size;
-          float py = ny * cell_size;
+          float px = nx * cell_size - he_x;
+          float py = ny * cell_size - he_y;
 
-          float dx = px - pos.position.x;
-          float dy = py - pos.position.y;
+          float dx = px - local_pos.x;
+          float dy = py - local_pos.y;
 
           float dist_sq = dx * dx + dy * dy;
 
@@ -861,16 +689,28 @@ inline void RenderFluidFilled(ECS& ecs,
       if (state == 0) continue;
 
       float offset_x = 0.f;
-      Vector2 p0{float(x * cell_size) - offset_x, float(y * cell_size)};
-      Vector2 p1{float((x + 1) * cell_size) - offset_x, float(y * cell_size)};
-      Vector2 p2{float((x + 1) * cell_size) - offset_x,
-                 float((y + 1) * cell_size)};
-      Vector2 p3{float(x * cell_size) - offset_x, float((y + 1) * cell_size)};
+      Vector2 p0{float(x * cell_size) - he_x - offset_x,
+                 float(y * cell_size) - he_y};
+      Vector2 p1{float((x + 1) * cell_size) - he_x - offset_x,
+                 float(y * cell_size) - he_y};
+      Vector2 p2{float((x + 1) * cell_size) - he_x - offset_x,
+                 float((y + 1) * cell_size) - he_y};
+      Vector2 p3{float(x * cell_size) - he_x - offset_x,
+                 float((y + 1) * cell_size) - he_y};
 
       Vector2 a = InterpolateEdge(p0, p1, v0, v1, threshold);
       Vector2 b = InterpolateEdge(p1, p2, v1, v2, threshold);
       Vector2 c = InterpolateEdge(p2, p3, v2, v3, threshold);
       Vector2 d = InterpolateEdge(p3, p0, v3, v0, threshold);
+
+      Vector2 aw = LocalToWorld(a.x, a.y);
+      Vector2 bw = LocalToWorld(b.x, b.y);
+      Vector2 cw = LocalToWorld(c.x, c.y);
+      Vector2 dw = LocalToWorld(d.x, d.y);
+      Vector2 p0w = LocalToWorld(p0.x, p0.y);
+      Vector2 p1w = LocalToWorld(p1.x, p1.y);
+      Vector2 p2w = LocalToWorld(p2.x, p2.y);
+      Vector2 p3w = LocalToWorld(p3.x, p3.y);
 
       float avg = (v0 + v1 + v2 + v3) * 0.25f;
 
@@ -886,77 +726,77 @@ inline void RenderFluidFilled(ECS& ecs,
 
       switch (state) {
         case 1:
-          DrawTriangleCCW(p0, d, a, col);
+          DrawTriangleCCW(p0w, dw, aw, col);
           break;
 
         case 2:
-          DrawTriangleCCW(p1, a, b, col);
+          DrawTriangleCCW(p1w, aw, bw, col);
           break;
 
         case 3:
-          DrawTriangleCCW(p0, p1, b, col);
-          DrawTriangleCCW(p0, b, d, col);
+          DrawTriangleCCW(p0w, p1w, bw, col);
+          DrawTriangleCCW(p0w, bw, dw, col);
           break;
 
         case 4:
-          DrawTriangleCCW(p2, b, c, col);
+          DrawTriangleCCW(p2w, bw, cw, col);
           break;
 
         case 5:
-          DrawTriangleCCW(p0, d, a, col);
-          DrawTriangleCCW(p2, b, c, col);
+          DrawTriangleCCW(p0w, dw, aw, col);
+          DrawTriangleCCW(p2w, bw, cw, col);
           break;
 
         case 6:
-          DrawTriangleCCW(a, p1, p2, col);
-          DrawTriangleCCW(a, p2, c, col);
+          DrawTriangleCCW(aw, p1w, p2w, col);
+          DrawTriangleCCW(aw, p2w, cw, col);
           break;
 
         case 7:
-          DrawTriangleCCW(p0, p1, p2, col);
-          DrawTriangleCCW(p0, p2, c, col);
-          DrawTriangleCCW(p0, c, d, col);
+          DrawTriangleCCW(p0w, p1w, p2w, col);
+          DrawTriangleCCW(p0w, p2w, cw, col);
+          DrawTriangleCCW(p0w, cw, dw, col);
           break;
 
         case 8:
-          DrawTriangleCCW(p3, c, d, col);
+          DrawTriangleCCW(p3w, cw, dw, col);
           break;
 
         case 9:
-          DrawTriangleCCW(p0, a, p3, col);
-          DrawTriangleCCW(p3, a, c, col);
+          DrawTriangleCCW(p0w, aw, p3w, col);
+          DrawTriangleCCW(p3w, aw, cw, col);
           break;
 
         case 10:
-          DrawTriangleCCW(p1, a, b, col);
-          DrawTriangleCCW(p3, c, d, col);
+          DrawTriangleCCW(p1w, aw, bw, col);
+          DrawTriangleCCW(p3w, cw, dw, col);
           break;
 
         case 11:
-          DrawTriangleCCW(p0, p1, b, col);
-          DrawTriangleCCW(p0, b, c, col);
-          DrawTriangleCCW(p0, c, p3, col);
+          DrawTriangleCCW(p0w, p1w, bw, col);
+          DrawTriangleCCW(p0w, bw, cw, col);
+          DrawTriangleCCW(p0w, cw, p3w, col);
           break;
 
         case 12:
-          DrawTriangleCCW(p3, p2, b, col);
-          DrawTriangleCCW(p3, b, d, col);
+          DrawTriangleCCW(p3w, p2w, bw, col);
+          DrawTriangleCCW(p3w, bw, dw, col);
           break;
 
         case 13:
-          DrawTriangleCCW(p0, a, p2, col);
-          DrawTriangleCCW(p0, p2, p3, col);
+          DrawTriangleCCW(p0w, aw, p2w, col);
+          DrawTriangleCCW(p0w, p2w, p3w, col);
           break;
 
         case 14:
-          DrawTriangleCCW(p1, p2, p3, col);
-          DrawTriangleCCW(p1, p3, d, col);
-          DrawTriangleCCW(p1, d, a, col);
+          DrawTriangleCCW(p1w, p2w, p3w, col);
+          DrawTriangleCCW(p1w, p3w, dw, col);
+          DrawTriangleCCW(p1w, dw, aw, col);
           break;
 
         case 15:
-          DrawTriangleCCW(p0, p1, p2, col);
-          DrawTriangleCCW(p0, p2, p3, col);
+          DrawTriangleCCW(p0w, p1w, p2w, col);
+          DrawTriangleCCW(p0w, p2w, p3w, col);
           break;
       }
 
@@ -967,35 +807,35 @@ inline void RenderFluidFilled(ECS& ecs,
       switch (state) {
         case 1:
         case 14:
-          DrawLineEx(d, a, 2.f, glow);
+          DrawLineEx(dw, aw, 2.f, glow);
           break;
         case 2:
         case 13:
-          DrawLineEx(a, b, 2.f, glow);
+          DrawLineEx(aw, bw, 2.f, glow);
           break;
         case 3:
         case 12:
-          DrawLineEx(d, b, 2.f, glow);
+          DrawLineEx(dw, bw, 2.f, glow);
           break;
         case 4:
         case 11:
-          DrawLineEx(b, c, 2.f, glow);
+          DrawLineEx(bw, cw, 2.f, glow);
           break;
         case 5:
-          DrawLineEx(d, c, 2.f, glow);
-          DrawLineEx(a, b, 2.f, glow);
+          DrawLineEx(dw, cw, 2.f, glow);
+          DrawLineEx(aw, bw, 2.f, glow);
           break;
         case 6:
         case 9:
-          DrawLineEx(a, c, 2.f, glow);
+          DrawLineEx(aw, cw, 2.f, glow);
           break;
         case 7:
         case 8:
-          DrawLineEx(d, c, 2.f, glow);
+          DrawLineEx(dw, cw, 2.f, glow);
           break;
         case 10:
-          DrawLineEx(a, d, 2.f, glow);
-          DrawLineEx(b, c, 2.f, glow);
+          DrawLineEx(aw, dw, 2.f, glow);
+          DrawLineEx(bw, cw, 2.f, glow);
           break;
       }
     }
@@ -1024,24 +864,26 @@ inline void ResolveCollisions(ECS& ecs) {
   const float base_repulsion = 250.f;
   const float particle_repulsion = 0.05f;
 
-ecs.group_view<components::CanvasComponent>(
+  ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
-      ecs.group_view<components::PositionComponent, components::VelocityComponent,
-                     components::CircleComponent>(
-        [&](Entity, components::PositionComponent& pos,
-            components::VelocityComponent& vel,
-            components::CircleComponent& c) {
+      ecs
+        .group_view<components::PositionComponent,
+                    components::VelocityComponent, components::CircleComponent>(
+          [&](Entity, components::PositionComponent& pos,
+              components::VelocityComponent& vel,
+              components::CircleComponent& c) {
             Vector2 local_pos = WorldToCanvasLocal(pos.position, canvas);
 
             float hx = canvas.half_extents.x - c.radius;
             float hy = canvas.half_extents.y - c.radius;
 
-            float dist_from_center = std::sqrt(local_pos.x * local_pos.x + local_pos.y * local_pos.y);
+            float dist_from_center =
+              std::sqrt(local_pos.x * local_pos.x + local_pos.y * local_pos.y);
             float corner_dist = std::sqrt(hx * hx + hy * hy);
 
             bool is_near_corner = dist_from_center > corner_dist * 0.8f;
             bool is_outside = local_pos.x < -hx || local_pos.x > hx ||
-                               local_pos.y < -hy || local_pos.y > hy;
+                              local_pos.y < -hy || local_pos.y > hy;
 
             if (is_outside) {
               local_pos.x = std::clamp(local_pos.x, -hx, hx);

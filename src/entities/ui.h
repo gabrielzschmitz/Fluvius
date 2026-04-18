@@ -206,38 +206,26 @@ inline void CreateUI(engine::ECS& ecs) {
                                                   "Toggle particle bouncing.");
   ecs.add<engine::components::UIGroupChildComponent>(checkbox, physics_group);
 
-  // //
-  // // New line
-  // //
-  // engine::Entity newline = ecs.create_entity();
-  //
-  // ecs.add<engine::components::UILayoutChildComponent>(
-  //   newline, engine::components::UILayoutChildComponent{window, 0.f, 0.f});
-  //
-  // ecs.add<engine::components::UIResolvedRectComponent>(newline);
-  //
-  // ecs.add<engine::components::UINewLineComponent>(newline);
-  // ecs.add<engine::components::UIGroupChildComponent>(newline, physics_group);
-
   //
   // Number text
   //
-  engine::Entity text = ecs.create_entity();
+  engine::Entity number_text = ecs.create_entity();
 
   ecs.add<engine::components::UILayoutChildComponent>(
-    text, engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+    number_text, engine::components::UILayoutChildComponent{window, 0.f, 20.f});
 
-  ecs.add<engine::components::UIResolvedRectComponent>(text);
+  ecs.add<engine::components::UIResolvedRectComponent>(number_text);
 
   ecs.add<engine::components::UITextComponent>(
-    text, engine::components::UITextComponent(
-            "Particles: " +
-            std::to_string(motrix::entities::fluid_particles.size())));
+    number_text, engine::components::UITextComponent(
+                   "Particles: " +
+                   std::to_string(motrix::entities::fluid_particles.size())));
 
   ecs.add<engine::components::UITooltipComponent>(
-    text, "Displays the total number of particles in the simulation.");
+    number_text, "Displays the total number of particles in the simulation.");
 
-  ecs.add<engine::components::UIGroupChildComponent>(text, physics_group);
+  ecs.add<engine::components::UIGroupChildComponent>(number_text,
+                                                     physics_group);
 
   // Density text
   engine::Entity density_text = ecs.create_entity();
@@ -290,99 +278,6 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      particle_group);
 
   //
-  // Low color dropdown
-  //
-  engine::Entity low_color_dropdown = ecs.create_entity();
-
-  ecs.add<engine::components::UILayoutChildComponent>(
-    low_color_dropdown,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-
-  ecs.add<engine::components::UIResolvedRectComponent>(low_color_dropdown);
-
-  ecs.add<engine::components::UIDropdownComponent>(
-    low_color_dropdown,
-    engine::components::UIDropdownComponent{
-      "Low",
-      {"White", "Red", "Green", "Blue"},
-      &low_color_index,
-      [](const std::string& selection) {
-        static const std::unordered_map<std::string, Color> colorMap = {
-          {"White", {255, 255, 255, 130}},
-          {"Red", {255, 50, 50, 130}},
-          {"Blue", {0, 0, 128, 130}},
-          {"Green", {0, 179, 90, 130}}};
-
-        pressure_low_color = colorMap.at(selection);
-      }});
-  ecs.add<engine::components::UITooltipComponent>(
-    low_color_dropdown, "Control the color of low pressure areas.");
-  ecs.add<engine::components::UIGroupChildComponent>(low_color_dropdown,
-                                                     particle_group);
-
-  //
-  // Mid color dropdown
-  //
-  engine::Entity mid_color_dropdown = ecs.create_entity();
-
-  ecs.add<engine::components::UILayoutChildComponent>(
-    mid_color_dropdown,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-
-  ecs.add<engine::components::UIResolvedRectComponent>(mid_color_dropdown);
-
-  ecs.add<engine::components::UIDropdownComponent>(
-    mid_color_dropdown,
-    engine::components::UIDropdownComponent{
-      "Neutral",
-      {"White", "Red", "Green", "Blue"},
-      &mid_color_index,
-      [](const std::string& selection) {
-        static const std::unordered_map<std::string, Color> colorMap = {
-          {"White", {255, 255, 255, 130}},
-          {"Red", {255, 50, 50, 130}},
-          {"Blue", {0, 0, 128, 130}},
-          {"Green", {0, 179, 90, 130}}};
-
-        pressure_mid_color = colorMap.at(selection);
-      }});
-  ecs.add<engine::components::UITooltipComponent>(
-    mid_color_dropdown, "Control the color of mid pressure areas.");
-  ecs.add<engine::components::UIGroupChildComponent>(mid_color_dropdown,
-                                                     particle_group);
-
-  //
-  // High color dropdown
-  //
-  engine::Entity high_color_dropdown = ecs.create_entity();
-
-  ecs.add<engine::components::UILayoutChildComponent>(
-    high_color_dropdown,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-
-  ecs.add<engine::components::UIResolvedRectComponent>(high_color_dropdown);
-
-  ecs.add<engine::components::UIDropdownComponent>(
-    high_color_dropdown,
-    engine::components::UIDropdownComponent{
-      "High",
-      {"White", "Red", "Green", "Blue"},
-      &high_color_index,
-      [](const std::string& selection) {
-        static const std::unordered_map<std::string, Color> colorMap = {
-          {"White", {255, 255, 255, 130}},
-          {"Red", {255, 50, 50, 130}},
-          {"Blue", {0, 0, 128, 130}},
-          {"Green", {0, 179, 90, 130}}};
-
-        pressure_high_color = colorMap.at(selection);
-      }});
-  ecs.add<engine::components::UITooltipComponent>(
-    high_color_dropdown, "Control the color of mid pressure areas.");
-  ecs.add<engine::components::UIGroupChildComponent>(high_color_dropdown,
-                                                     particle_group);
-
-  //
   // Simulation GROUP
   //
   engine::Entity simulation_group = ecs.create_entity();
@@ -409,107 +304,6 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      simulation_group);
   ecs.add<engine::components::UITooltipComponent>(
     speed_slider, "Adjust the temporal scale of the fluid physics.");
-
-  //
-  // Toggle Fluid Surface
-  //
-  engine::Entity toggle_fluid_surface = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    toggle_fluid_surface,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_surface);
-  ecs.add<engine::components::UICheckboxComponent>(
-    toggle_fluid_surface, engine::components::UICheckboxComponent{
-                            "Render Surface", &render_fluid_surface});
-  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_surface,
-                                                     simulation_group);
-  ecs.add<engine::components::UITooltipComponent>(
-    toggle_fluid_surface, "Toggle fluid surface rendering.");
-
-  //
-  // Toggle Fluid Fill
-  //
-  engine::Entity toggle_fluid_fill = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    toggle_fluid_fill,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_fill);
-  ecs.add<engine::components::UICheckboxComponent>(
-    toggle_fluid_fill, engine::components::UICheckboxComponent{
-                         "Render Fill", &render_fluid_filled});
-  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_fill,
-                                                     simulation_group);
-  ecs.add<engine::components::UITooltipComponent>(
-    toggle_fluid_fill, "Toggle fluid fill rendering.");
-
-  //
-  // Toggle Fluid Marching Squares
-  //
-  engine::Entity toggle_fluid_marching_squares = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    toggle_fluid_marching_squares,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(
-    toggle_fluid_marching_squares);
-  ecs.add<engine::components::UICheckboxComponent>(
-    toggle_fluid_marching_squares,
-    engine::components::UICheckboxComponent{"Render Marching Squares",
-                                            &render_marching_squares});
-  ecs.add<engine::components::UIGroupChildComponent>(
-    toggle_fluid_marching_squares, simulation_group);
-  ecs.add<engine::components::UITooltipComponent>(
-    toggle_fluid_marching_squares, "Toggle fluid marching squares rendering.");
-
-  //
-  // Toggle Fluid Pressure Field
-  //
-  engine::Entity toggle_fluid_pressure_field = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    toggle_fluid_pressure_field,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(
-    toggle_fluid_pressure_field);
-  ecs.add<engine::components::UICheckboxComponent>(
-    toggle_fluid_pressure_field,
-    engine::components::UICheckboxComponent{"Render Pressure Field",
-                                            &render_pressure_field});
-  ecs.add<engine::components::UIGroupChildComponent>(
-    toggle_fluid_pressure_field, simulation_group);
-  ecs.add<engine::components::UITooltipComponent>(
-    toggle_fluid_pressure_field, "Toggle fluid pressure field rendering.");
-
-  //
-  // Toggle Fluid Particles
-  //
-  engine::Entity toggle_fluid_particles = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    toggle_fluid_particles,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_particles);
-  ecs.add<engine::components::UICheckboxComponent>(
-    toggle_fluid_particles, engine::components::UICheckboxComponent{
-                              "Render Particles", &render_fluid_particles});
-  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_particles,
-                                                     simulation_group);
-  ecs.add<engine::components::UITooltipComponent>(
-    toggle_fluid_particles, "Toggle fluid particles rendering.");
-
-  //
-  // Toggle Fluid Velocity Vectors
-  //
-  engine::Entity toggle_fluid_velocity = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    toggle_fluid_velocity,
-    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_velocity);
-  ecs.add<engine::components::UICheckboxComponent>(
-    toggle_fluid_velocity,
-    engine::components::UICheckboxComponent{"Render Particles Velocity Vector",
-                                            &render_particle_velocity});
-  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_velocity,
-                                                     simulation_group);
-  ecs.add<engine::components::UITooltipComponent>(
-    toggle_fluid_velocity, "Toggle fluid particles velocity vector rendering.");
 
   //
   // Pause / Resume Toggle
@@ -551,6 +345,214 @@ inline void CreateUI(engine::ECS& ecs) {
   ecs.add<engine::components::UIGroupChildComponent>(reset_button,
                                                      simulation_group);
 
+  //
+  // Render GROUP
+  //
+  engine::Entity render_group = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    render_group,
+    engine::components::UILayoutChildComponent{window, -1.f, 0.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(render_group);
+  ecs.add<engine::components::UIGroupComponent>(
+    render_group, engine::components::UIGroupComponent{"Render Options", true});
+
+  //
+  // Toggle Fluid Pressure Field
+  //
+  engine::Entity toggle_fluid_pressure_field = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    toggle_fluid_pressure_field,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(
+    toggle_fluid_pressure_field);
+  ecs.add<engine::components::UICheckboxComponent>(
+    toggle_fluid_pressure_field, engine::components::UICheckboxComponent{
+                                   "Pressure Field", &render_pressure_field});
+  ecs.add<engine::components::UIGroupChildComponent>(
+    toggle_fluid_pressure_field, simulation_group);
+  ecs.add<engine::components::UIGroupChildComponent>(
+    toggle_fluid_pressure_field, render_group);
+  ecs.add<engine::components::UITooltipComponent>(
+    toggle_fluid_pressure_field, "Toggle fluid pressure field rendering.");
+
+  //
+  // Toggle Fluid Particles
+  //
+  engine::Entity toggle_fluid_particles = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    toggle_fluid_particles,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_particles);
+  ecs.add<engine::components::UICheckboxComponent>(
+    toggle_fluid_particles, engine::components::UICheckboxComponent{
+                              "Particles", &render_fluid_particles});
+  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_particles,
+                                                     render_group);
+  ecs.add<engine::components::UITooltipComponent>(
+    toggle_fluid_particles, "Toggle fluid particles rendering.");
+
+  //
+  // Toggle Fluid Velocity Vectors
+  //
+  engine::Entity toggle_fluid_velocity = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    toggle_fluid_velocity,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_velocity);
+  ecs.add<engine::components::UICheckboxComponent>(
+    toggle_fluid_velocity, engine::components::UICheckboxComponent{
+                             "Velocity Vectors", &render_particle_velocity});
+  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_velocity,
+                                                     render_group);
+  ecs.add<engine::components::UITooltipComponent>(
+    toggle_fluid_velocity, "Toggle fluid particles velocity vector rendering.");
+
+  //
+  // Toggle Fluid Fill
+  //
+  engine::Entity toggle_fluid_fill = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    toggle_fluid_fill,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(toggle_fluid_fill);
+  ecs.add<engine::components::UICheckboxComponent>(
+    toggle_fluid_fill,
+    engine::components::UICheckboxComponent{"Fill", &render_fluid_filled});
+  ecs.add<engine::components::UIGroupChildComponent>(toggle_fluid_fill,
+                                                     render_group);
+  ecs.add<engine::components::UITooltipComponent>(
+    toggle_fluid_fill, "Toggle fluid fill rendering.");
+
+  //
+  // Pressure Field Text
+  //
+  engine::Entity pressure_text = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    pressure_text,
+    engine::components::UILayoutChildComponent{window, -1.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(pressure_text);
+
+  ecs.add<engine::components::UITextComponent>(
+    pressure_text, engine::components::UITextComponent("Pressure Colors:"));
+
+  ecs.add<engine::components::UITooltipComponent>(
+    pressure_text,
+    "Change the pressure field colors for low/mid/high pressures.");
+
+  ecs.add<engine::components::UIGroupChildComponent>(pressure_text,
+                                                     render_group);
+
+  //
+  // New line
+  //
+  engine::Entity pressure_newline = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    pressure_newline,
+    engine::components::UILayoutChildComponent{window, 0.f, 0.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(pressure_newline);
+
+  ecs.add<engine::components::UINewLineComponent>(pressure_newline);
+  ecs.add<engine::components::UIGroupChildComponent>(pressure_newline,
+                                                     render_group);
+
+  //
+  // Low color dropdown
+  //
+  engine::Entity low_color_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    low_color_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(low_color_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    low_color_dropdown,
+    engine::components::UIDropdownComponent{
+      "Low",
+      {"White", "Red", "Green", "Blue"},
+      &low_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"White", {255, 255, 255, 130}},
+          {"Red", {255, 50, 50, 130}},
+          {"Blue", {0, 0, 128, 130}},
+          {"Green", {0, 179, 90, 130}}};
+
+        pressure_low_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    low_color_dropdown, "Control the color of low pressure areas.");
+  ecs.add<engine::components::UIGroupChildComponent>(low_color_dropdown,
+                                                     render_group);
+
+  //
+  // Mid color dropdown
+  //
+  engine::Entity mid_color_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    mid_color_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(mid_color_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    mid_color_dropdown,
+    engine::components::UIDropdownComponent{
+      "Neutral",
+      {"White", "Red", "Green", "Blue"},
+      &mid_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"White", {255, 255, 255, 130}},
+          {"Red", {255, 50, 50, 130}},
+          {"Blue", {0, 0, 128, 130}},
+          {"Green", {0, 179, 90, 130}}};
+
+        pressure_mid_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    mid_color_dropdown, "Control the color of mid pressure areas.");
+  ecs.add<engine::components::UIGroupChildComponent>(mid_color_dropdown,
+                                                     render_group);
+
+  //
+  // High color dropdown
+  //
+  engine::Entity high_color_dropdown = ecs.create_entity();
+
+  ecs.add<engine::components::UILayoutChildComponent>(
+    high_color_dropdown,
+    engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+
+  ecs.add<engine::components::UIResolvedRectComponent>(high_color_dropdown);
+
+  ecs.add<engine::components::UIDropdownComponent>(
+    high_color_dropdown,
+    engine::components::UIDropdownComponent{
+      "High",
+      {"White", "Red", "Green", "Blue"},
+      &high_color_index,
+      [](const std::string& selection) {
+        static const std::unordered_map<std::string, Color> colorMap = {
+          {"White", {255, 255, 255, 130}},
+          {"Red", {255, 50, 50, 130}},
+          {"Blue", {0, 0, 128, 130}},
+          {"Green", {0, 179, 90, 130}}};
+
+        pressure_high_color = colorMap.at(selection);
+      }});
+  ecs.add<engine::components::UITooltipComponent>(
+    high_color_dropdown, "Control the color of mid pressure areas.");
+  ecs.add<engine::components::UIGroupChildComponent>(high_color_dropdown,
+                                                     render_group);
+
+  // LOG
   logger::info("[GUI] Created window '{}' (entity:{}:{})",
                ecs.get<engine::components::UIWindowComponent>(window).title,
                window.index, window.version);
