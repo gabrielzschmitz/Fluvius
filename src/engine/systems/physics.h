@@ -977,23 +977,26 @@ inline void ResolveCollisions(ECS& ecs) {
   const float base_repulsion = 250.f;
   const float particle_repulsion = 0.05f;
 
-  ecs.group_view<components::CanvasComponent>(
+ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
-      ecs
-        .group_view<components::PositionComponent,
-                    components::VelocityComponent, components::CircleComponent>(
-          [&](Entity, components::PositionComponent& pos,
-              components::VelocityComponent& vel,
-              components::CircleComponent& c) {
+      ecs.group_view<components::PositionComponent, components::VelocityComponent,
+                     components::CircleComponent>(
+        [&](Entity, components::PositionComponent& pos,
+            components::VelocityComponent& vel,
+            components::CircleComponent& c) {
             Vector2 local_pos = WorldToCanvasLocal(pos.position, canvas);
 
             float hx = canvas.half_extents.x - c.radius;
             float hy = canvas.half_extents.y - c.radius;
 
-            bool was_outside = local_pos.x < -hx || local_pos.x > hx ||
+            float dist_from_center = std::sqrt(local_pos.x * local_pos.x + local_pos.y * local_pos.y);
+            float corner_dist = std::sqrt(hx * hx + hy * hy);
+
+            bool is_near_corner = dist_from_center > corner_dist * 0.8f;
+            bool is_outside = local_pos.x < -hx || local_pos.x > hx ||
                                local_pos.y < -hy || local_pos.y > hy;
 
-            if (was_outside) {
+            if (is_outside) {
               local_pos.x = std::clamp(local_pos.x, -hx, hx);
               local_pos.y = std::clamp(local_pos.y, -hy, hy);
 
@@ -1001,14 +1004,9 @@ inline void ResolveCollisions(ECS& ecs) {
               pos.position.x = corrected_world.x;
               pos.position.y = corrected_world.y;
 
-              if (entities::bounce_enabled) {
-                float speed = Vector2Length(vel.velocity);
-                if (speed > 10.f) {
-                  float damp = 0.95f;
-                  vel.velocity.x *= damp;
-                  vel.velocity.y *= damp;
-                }
-              }
+              float damp = is_near_corner ? 0.7f : 0.85f;
+              vel.velocity.x *= damp;
+              vel.velocity.y *= damp;
             }
           });
     });
