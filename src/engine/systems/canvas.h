@@ -77,20 +77,20 @@ inline void UpdateCanvasInteraction(ECS& ecs,
         (touching_left || touching_right) && (touching_top || touching_bottom);
 
       if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-if (near_corner) {
-        if (touching_left && touching_top)
-          canvas.dragging_corner = components::CanvasComponent::Corner::TL;
-        else if (touching_right && touching_top)
-          canvas.dragging_corner = components::CanvasComponent::Corner::TR;
-        else if (touching_left && touching_bottom)
-          canvas.dragging_corner = components::CanvasComponent::Corner::BL;
-        else if (touching_right && touching_bottom)
-          canvas.dragging_corner = components::CanvasComponent::Corner::BR;
+        if (near_corner) {
+          if (touching_left && touching_top)
+            canvas.dragging_corner = components::CanvasComponent::Corner::TL;
+          else if (touching_right && touching_top)
+            canvas.dragging_corner = components::CanvasComponent::Corner::TR;
+          else if (touching_left && touching_bottom)
+            canvas.dragging_corner = components::CanvasComponent::Corner::BL;
+          else if (touching_right && touching_bottom)
+            canvas.dragging_corner = components::CanvasComponent::Corner::BR;
 
-        float dx = mouse_world.x - canvas.position.x;
-        float dy = mouse_world.y - canvas.position.y;
-        canvas.initial_mouse_angle = std::atan2(dy, dx);
-      } else if (touching_left) {
+          float dx = mouse_world.x - canvas.position.x;
+          float dy = mouse_world.y - canvas.position.y;
+          canvas.initial_mouse_angle = std::atan2(dy, dx);
+        } else if (touching_left) {
           canvas.dragging_edge = components::CanvasComponent::Edge::Left;
         } else if (touching_right) {
           canvas.dragging_edge = components::CanvasComponent::Edge::Right;
@@ -154,18 +154,18 @@ inline void RenderCanvas(ECS& ecs, const components::CameraComponent& cam) {
       Color bg = canvas_background_color();
       float border_w = canvas_border_width();
 
-      Rectangle rec{canvas.position.x, canvas.position.y, canvas.size.x, canvas.size.y};
+      Rectangle rec{canvas.position.x, canvas.position.y, canvas.size.x,
+                    canvas.size.y};
       DrawRectanglePro(rec, {canvas.size.x / 2.f, canvas.size.y / 2.f},
-                    canvas.rotation * 180.f / PI, bg);
+                       canvas.rotation * 180.f / PI, bg);
 
       Vector2 corners[4] = {{-canvas.half_extents.x, -canvas.half_extents.y},
                             {canvas.half_extents.x, -canvas.half_extents.y},
                             {canvas.half_extents.x, canvas.half_extents.y},
                             {-canvas.half_extents.x, canvas.half_extents.y}};
 
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 4; i++)
         corners[i] = CanvasLocalToWorld(corners[i], canvas);
-      }
 
       Vector2 tl = corners[0];
       Vector2 tr = corners[1];
@@ -185,7 +185,7 @@ inline void RenderCanvas(ECS& ecs, const components::CameraComponent& cam) {
 
       for (int i = 0; i < 4; i++) {
         handle_positions[i] = CanvasLocalToWorld(handle_positions[i], canvas);
-        DrawCircleV(handle_positions[i], canvas.handle_radius, WHITE);
+        DrawCircleV(handle_positions[i], canvas.handle_radius, LIGHTGRAY);
       }
     });
 

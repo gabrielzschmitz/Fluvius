@@ -608,7 +608,7 @@ inline void RenderFluidFilled(ECS& ecs,
 
   auto& canvas = *canvas_ptr;
 
-  constexpr int cell_size = 5;
+  constexpr int cell_size = 4;
 
   int grid_w = (CANVAS_W + cell_size + 2) / cell_size;
   int grid_h = (CANVAS_H + cell_size + 1) / cell_size;
