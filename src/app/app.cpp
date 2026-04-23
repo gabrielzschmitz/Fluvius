@@ -1,10 +1,6 @@
 // app/app.cpp
 #include "app/app.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 #include "app/app_state.h"
 #include "engine/globals.h"
 #include "engine/logger.h"
@@ -18,6 +14,10 @@
 #include "entities/ui.h"
 #include "raylib.h"
 #include "resource_dir.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace m_app = motrix::app;
 namespace m_eng = motrix::engine;
