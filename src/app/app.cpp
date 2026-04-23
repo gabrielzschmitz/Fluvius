@@ -15,10 +15,6 @@
 #include "raylib.h"
 #include "resource_dir.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 namespace m_app = motrix::app;
 namespace m_eng = motrix::engine;
 namespace m_ett = motrix::entities;

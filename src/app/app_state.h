@@ -4,6 +4,10 @@
 #include "engine/ecs/ecs.h"
 #include "raylib.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace motrix::app {
 
 struct AppState {

@@ -332,7 +332,7 @@ characterset("Unicode")
 buildoptions({ "/Zc:__cplusplus" })
 
 filter({ "system:windows", "options:not with-emscripten" })
-defines({ "_WIN32" })
+	defines({ "_WIN32", "NOMINMAX" })
 links({ "winmm", "gdi32", "opengl32" })
 libdirs({ "../bin/%{cfg.buildcfg}" })
 
