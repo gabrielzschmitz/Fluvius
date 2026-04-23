@@ -917,42 +917,77 @@ inline void ResolveCollisions(ECS& ecs) {
       particles.push_back({&pos, &vel, &c});
     });
 
+  float cell_size = entities::particle_size * 2.f;
+  if (cell_size < 1.f) cell_size = 1.f;
+  int cols = static_cast<int>(CANVAS_W / cell_size) + 3;
+  int rows = static_cast<int>(CANVAS_H / cell_size) + 3;
+  std::vector<std::vector<size_t>> grid(cols * rows);
+
   for (size_t i = 0; i < particles.size(); ++i) {
-    auto& a = particles[i];
-    for (size_t j = i + 1; j < particles.size(); ++j) {
-      auto& b = particles[j];
+    float px = particles[i].pos->position.x;
+    float py = particles[i].pos->position.y;
+    if (px < 0 || px > CANVAS_W || py < 0 || py > CANVAS_H) continue;
+    int cx = static_cast<int>(px / cell_size) + 1;
+    int cy = static_cast<int>(py / cell_size) + 1;
+    if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) {
+      grid[cy * cols + cx].push_back(i);
+    }
+  }
 
-      Vector2 delta = {b.pos->position.x - a.pos->position.x,
-                       b.pos->position.y - a.pos->position.y};
-      float dist_sq = delta.x * delta.x + delta.y * delta.y;
-      if (dist_sq <= 0.f) continue;
+  for (size_t i = 0; i < particles.size(); ++i) {
+    float px = particles[i].pos->position.x;
+    float py = particles[i].pos->position.y;
+    if (px < 0 || px > CANVAS_W || py < 0 || py > CANVAS_H) continue;
+    int cx = static_cast<int>(px / cell_size) + 1;
+    int cy = static_cast<int>(py / cell_size) + 1;
 
-      float dist = std::sqrt(dist_sq);
-      float radius_sum = a.circ->radius + b.circ->radius;
-      Vector2 dir = {delta.x / dist, delta.y / dist};
+    for (int dy = -1; dy <= 1; ++dy) {
+      int ny = cy + dy;
+      if (ny < 0 || ny >= rows) continue;
+      for (int dx = -1; dx <= 1; ++dx) {
+        int nx = cx + dx;
+        if (nx < 0 || nx >= cols) continue;
 
-      float repulse_dist = radius_sum * 3.f;
-      if (dist < repulse_dist) {
-        float repulse_strength = (repulse_dist - dist) / dist;
-        a.vel->velocity.x -= dir.x * particle_repulsion * repulse_strength;
-        a.vel->velocity.y -= dir.y * particle_repulsion * repulse_strength;
-        b.vel->velocity.x += dir.x * particle_repulsion * repulse_strength;
-        b.vel->velocity.y += dir.y * particle_repulsion * repulse_strength;
-      }
+        for (size_t j : grid[ny * cols + nx]) {
+          if (j <= i) continue;
 
-      if (dist < radius_sum) {
-        float overlap = radius_sum - dist;
-        a.pos->position.x -= dir.x * overlap * 0.5f;
-        a.pos->position.y -= dir.y * overlap * 0.5f;
-        b.pos->position.x += dir.x * overlap * 0.5f;
-        b.pos->position.y += dir.y * overlap * 0.5f;
+          auto& a = particles[i];
+          auto& b = particles[j];
 
-        float dot = (b.vel->velocity.x - a.vel->velocity.x) * dir.x +
-                    (b.vel->velocity.y - a.vel->velocity.y) * dir.y;
-        a.vel->velocity.x += dir.x * dot * 0.5f;
-        a.vel->velocity.y += dir.y * dot * 0.5f;
-        b.vel->velocity.x -= dir.x * dot * 0.5f;
-        b.vel->velocity.y -= dir.y * dot * 0.5f;
+          float dx_pos = b.pos->position.x - a.pos->position.x;
+          float dy_pos = b.pos->position.y - a.pos->position.y;
+          float dist_sq = dx_pos * dx_pos + dy_pos * dy_pos;
+          if (dist_sq <= 0.f) continue;
+
+          float dist = std::sqrt(dist_sq);
+          float radius_sum = a.circ->radius + b.circ->radius;
+          float dir_x = dx_pos / dist;
+          float dir_y = dy_pos / dist;
+
+          float repulse_dist = radius_sum * 3.f;
+          if (dist < repulse_dist) {
+            float repulse_strength = (repulse_dist - dist) / dist;
+            a.vel->velocity.x -= dir_x * particle_repulsion * repulse_strength;
+            a.vel->velocity.y -= dir_y * particle_repulsion * repulse_strength;
+            b.vel->velocity.x += dir_x * particle_repulsion * repulse_strength;
+            b.vel->velocity.y += dir_y * particle_repulsion * repulse_strength;
+          }
+
+          if (dist < radius_sum) {
+            float overlap = radius_sum - dist;
+            a.pos->position.x -= dir_x * overlap * 0.5f;
+            a.pos->position.y -= dir_y * overlap * 0.5f;
+            b.pos->position.x += dir_x * overlap * 0.5f;
+            b.pos->position.y += dir_y * overlap * 0.5f;
+
+            float dot = (b.vel->velocity.x - a.vel->velocity.x) * dir_x +
+                        (b.vel->velocity.y - a.vel->velocity.y) * dir_y;
+            a.vel->velocity.x += dir_x * dot * 0.5f;
+            a.vel->velocity.y += dir_y * dot * 0.5f;
+            b.vel->velocity.x -= dir_x * dot * 0.5f;
+            b.vel->velocity.y -= dir_y * dot * 0.5f;
+          }
+        }
       }
     }
   }
