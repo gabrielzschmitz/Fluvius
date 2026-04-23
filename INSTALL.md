@@ -51,9 +51,9 @@ platforms including web builds.
    # Open the generated .sln file and build in Visual Studio
    ```
 
-5. Run the game:
+5. Run the Fluvius :
    ```bash
-   ./bin/Release/RECS
+   ./bin/Release/Fluvius
    ```
 
 ---
@@ -73,7 +73,7 @@ platforms including web builds.
    ```
 3. Run the executable:
    ```cmd
-   bin\Release\RECS.exe
+   bin\Release\Fluvius.exe
    ```
 
 > **Note:** Use modern MinGW-W64 from
@@ -116,9 +116,9 @@ platforms including web builds.
    make config=release_x64
    ```
 
-4. Run the game:
+4. Run the Fluvius :
    ```bash
-   ./bin/Release/RECS
+   ./bin/Release/Fluvius
    ```
 
 #### Wayland Support
@@ -157,9 +157,9 @@ bear -- make config=release_x64 VERBOSE=1
    make config=release_x64
    ```
 
-4. Run the game:
+4. Run the Fluvius :
    ```bash
-   ./bin/Release/RECS
+   ./bin/Release/Fluvius
    ```
 
 #### Alternative: Xcode
@@ -214,16 +214,16 @@ Then open the generated Xcode project.
 
 5. Run locally:
    ```bash
-   emrun bin/Release/RECS.html
+   emrun bin/Release/Fluvius.html
    ```
 
 The web build will generate:
-- `RECS.html` - Main page
-- `RECS.js` - JavaScript runtime
-- `RECS.wasm` - WebAssembly binary
-- `RECS.data` - Packaged resources
+- `Fluvius.html` - Main page
+- `Fluvius.js` - JavaScript runtime
+- `Fluvius.wasm` - WebAssembly binary
+- `Fluvius.data` - Packaged resources
 
-You can host these files on any web server to deploy your game online.
+You can host these files on any web server to deploy your Fluvius online.
 
 ---
 
@@ -373,7 +373,7 @@ make config=release_x64
 ## Project Structure
 
 ```
-RECS/
+Fluvius/
 ├── build/               # Premake executables
 ├── build_files/         # Generated project files (created by Premake)
 ├── bin/                 # Compiled binaries
@@ -381,7 +381,7 @@ RECS/
 │   └── Release/
 ├── external/            # External dependencies (raylib)
 ├── include/             # Header files
-├── resources/           # Game assets (sounds, textures, etc.)
+├── resources/           # Fluvius assets (sounds, textures, etc.)
 ├── src/                 # Source code
 └── premake5.lua         # Build configuration
 ```
