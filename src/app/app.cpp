@@ -34,6 +34,17 @@ static void InitApp(m_app::AppState& state) {
                      motrix::entities::create_centered);
   m_ett::CreateUI(state.ecs);
 
+  int num_cores = 8;
+#ifdef _WIN32
+  SYSTEM_INFO sysinfo;
+  GetSystemInfo(&sysinfo);
+  num_cores = sysinfo.dwNumberOfProcessors;
+#elif defined(_POSIX_VERSION)
+  int detected = sysconf(_SC_NPROCESSORS_ONLN);
+  if (detected > 0) num_cores = detected;
+#endif
+  m_eng::systems::InitThreads(num_cores, state.ecs);
+
   state.ecs.print_entities(logger::Level::Debug, {"Circle"});
 }
 
