@@ -1,6 +1,10 @@
 // app/app.cpp
 #include "app/app.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "app/app_state.h"
 #include "engine/globals.h"
 #include "engine/logger.h"
