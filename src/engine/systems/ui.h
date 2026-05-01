@@ -329,9 +329,10 @@ inline void RenderSliders(ECS& ecs, Entity window_entity, float scroll_y,
 
     Rectangle bar{rect.x, rect.y + 14 * uiScale, rect.width, 16 * uiScale};
 
-    const char* fmt = (slider.max < 0.01f) ? "%s: %.6f" : "%s: %.2f";
+    int decimal_places = (slider.step >= 0.1f) ? 1 : (slider.step >= 0.01f) ? 2 : (slider.step >= 0.001f) ? 3 : 4;
+    const char* fmt = TextFormat("%%s: %%.%df", decimal_places);
     DrawText(TextFormat(fmt, slider.label.c_str(), current_val), rect.x, rect.y,
-             10 * uiScale, BLACK);
+              10 * uiScale, BLACK);
 
     DrawRectangleRec(bar, {223, 223, 223, 255});
     DrawRectangleLinesEx(bar, 1 * uiScale, BLACK);

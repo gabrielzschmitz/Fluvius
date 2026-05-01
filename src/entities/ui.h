@@ -195,11 +195,27 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      physics_group);
 
   //
+  // Velocity damping slider
   //
+  engine::Entity damping_slider = ecs.create_entity();
 
   ecs.add<engine::components::UILayoutChildComponent>(
+    damping_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
 
+  ecs.add<engine::components::UIResolvedRectComponent>(damping_slider);
 
+  ecs.add<engine::components::UISliderComponent>(
+    damping_slider, engine::components::UISliderComponent{
+                      "Damping", &velocity_damping, 0.9500f, 1.000f, 0.001f,
+                      [](float value) { velocity_damping = value; }});
+
+  ecs.add<engine::components::UITooltipComponent>(
+    damping_slider,
+    "Velocity damping per frame. Lower values make fluid settle faster.");
+
+  ecs.add<engine::components::UIGroupChildComponent>(damping_slider,
+                                                     physics_group);
 
   //
   // Number text

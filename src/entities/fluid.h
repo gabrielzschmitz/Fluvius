@@ -52,6 +52,7 @@ inline float target_density = 0.000425f;
 inline float pressure_multiplier = 250.f;
 inline float viscosity = 0.8f;
 inline float surface_tension = 0.25f;
+inline float velocity_damping = 0.997f;
 inline float particle_size =
   Clamp(2.0f * std::pow(1000.0f / static_cast<float>(PARTICLE_NUMBER), 0.4f),
         0.5f, 3.0f);
@@ -160,6 +161,7 @@ inline void ResetFluid(engine::ECS& ecs) {
 
   target_density = 0.000425f;
   pressure_multiplier = 250.f;
+  velocity_damping = 0.997f;
 
   particle_size =
     Clamp(2.0f * std::pow(1000.0f / static_cast<float>(PARTICLE_NUMBER), 0.4f),

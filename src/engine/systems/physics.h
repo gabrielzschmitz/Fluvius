@@ -1684,6 +1684,12 @@ inline void SimulateFluid(ECS& ecs, float dt) {
     pos_cache[i]->position.y += vel_cache[i]->velocity.y * effective_dt;
   }
 
+  float damp = entities::velocity_damping;
+  for (size_t i = 0; i < n; ++i) {
+    vel_cache[i]->velocity.x *= damp;
+    vel_cache[i]->velocity.y *= damp;
+  }
+
   ResolveCollisions(ecs);
 }
 
