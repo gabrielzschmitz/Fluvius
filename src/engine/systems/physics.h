@@ -1271,8 +1271,11 @@ inline void RenderUserPath(ECS& ecs, const components::CameraComponent& cam) {
       }
     });
 
-  for (size_t i = 0; i < world_points.size() - 1; ++i) {
-    DrawLineEx(world_points[i], world_points[i + 1], thickness, path_color);
+  // Draw path using splines for smooth curves
+  if (world_points.size() >= 4) {
+    DrawSplineCatmullRom(world_points.data(), world_points.size(), thickness, path_color);
+  } else if (world_points.size() >= 2) {
+    DrawSplineLinear(world_points.data(), world_points.size(), thickness, path_color);
   }
 
   EndMode2D();
