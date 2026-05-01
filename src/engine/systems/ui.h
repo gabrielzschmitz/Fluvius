@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "../../entities/ui.h"
 #include "../components/ui.h"
 #include "../ecs/ecs.h"
 #include "raymath.h"
@@ -612,7 +613,47 @@ inline void RenderTooltips(ECS& ecs, float scroll_y, bool input_consumed) {
 
 inline void RenderWindow(ECS& ecs, bool& input_consumed) {
   Vector2 mouse = GetMousePosition();
+
+  if (IsKeyPressed(KEY_F10)) {
+    bool has_window = false;
+    ecs.group_view<UIWindowComponent>([&](Entity, UIWindowComponent& window) {
+      has_window = true;
+      window.minimized = !window.minimized;
+      window.layout_dirty = true;
+    });
+
+    if (!has_window) {
+      motrix::entities::CreateUI(ecs);
+      return;
+    }
+  }
+
   ecs.group_view<UIWindowComponent>([&](Entity e, UIWindowComponent& window) {
+    if (window.minimized) {
+      float btn_size = 24.f * uiScale;
+      float btn_x = GetScreenWidth() - btn_size - (10.f * uiScale);
+      float btn_y = 10.f * uiScale;
+      Rectangle restore_btn{btn_x, btn_y, btn_size, btn_size};
+
+      DrawWin95Box(restore_btn, LIGHTGRAY);
+
+      float margin = 6.f * uiScale;
+      Rectangle inner_rect{restore_btn.x + margin, restore_btn.y + margin,
+                           restore_btn.width - (margin * 2),
+                           restore_btn.height - (margin * 2)};
+      DrawRectangleLinesEx(inner_rect, 1.f * uiScale, BLACK);
+
+      if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        if (CheckCollisionPointRec(mouse, restore_btn)) {
+          window.minimized = false;
+          window.layout_dirty = true;
+          input_consumed = true;
+        }
+      }
+
+      return;
+    }
+
     constexpr float title_h_logical = 24.f;
     const float title_h_scaled = title_h_logical * uiScale;
     const float border = 2.f * uiScale;
@@ -624,12 +665,18 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed) {
     const float title_h = 24.f * uiScale;
     Rectangle close_button{rect.x + rect.width - title_h, rect.y, title_h,
                            title_h};
+    Rectangle minimize_button{rect.x + rect.width - (title_h * 2), rect.y,
+                              title_h, title_h};
     Rectangle title_bar = {rect.x + border, rect.y + border,
                            rect.width - (border * 2), title_h_scaled - border};
 
     if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
       if (CheckCollisionPointRec(mouse, close_button)) {
         window.close_requested = true;
+        input_consumed = true;
+      } else if (CheckCollisionPointRec(mouse, minimize_button)) {
+        window.minimized = !window.minimized;
+        window.layout_dirty = true;
         input_consumed = true;
       } else if (CheckCollisionPointRec(mouse, title_bar)) {
         window.dragging = true;
@@ -652,11 +699,16 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed) {
     DrawText(window.title.c_str(), rect.x + 6 * uiScale, rect.y + 4 * uiScale,
              13 * uiScale, WHITE);
 
-    if (mouse_over_window) HandleWindowScrolling(ecs, window);
-    DrawWin95Scrollbar(window);
+    DrawWin95Box(minimize_button, LIGHTGRAY);
+    float fontSize = 10.f * uiScale;
+
+    int minTextWidth = MeasureText("_", (int)fontSize);
+    float min_x_offset = (minimize_button.width - (float)minTextWidth) / 2.f;
+    float min_y_offset = (minimize_button.height - fontSize) / 2.f;
+    DrawText("_", minimize_button.x + min_x_offset,
+             minimize_button.y + min_y_offset, (int)fontSize, BLACK);
 
     DrawWin95Box(close_button, LIGHTGRAY);
-    float fontSize = 10.f * uiScale;
 
     int textWidth = MeasureText("X", (int)fontSize);
 
@@ -665,6 +717,35 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed) {
 
     DrawText("X", close_button.x + x_offset, close_button.y + y_offset,
              (int)fontSize, BLACK);
+
+    if (window.close_requested) {
+      std::vector<Entity> to_destroy;
+
+      std::function<void(Entity)> collect_descendants = [&](Entity parent) {
+        ecs.group_view<UILayoutChildComponent>(
+          [&](Entity child, UILayoutChildComponent& layout) {
+            if (layout.parent.index == parent.index &&
+                layout.parent.version == parent.version) {
+              collect_descendants(child);
+              to_destroy.push_back(child);
+            }
+          });
+      };
+
+      collect_descendants(e);
+
+      for (Entity child : to_destroy) ecs.destroy_entity(child);
+
+      logger::info(
+        "[GUI] Closed window '{}' and cleaned up {} sub-entities "
+        "(entity:{}:{})",
+        window.title, to_destroy.size(), e.index, e.version);
+      ecs.destroy_entity(e);
+      return;
+    }
+
+    if (mouse_over_window) HandleWindowScrolling(ecs, window);
+    DrawWin95Scrollbar(window);
 
     bool has_scrollbar =
       (window.content_height > (window.height - title_h_logical));
@@ -691,31 +772,6 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed) {
 
     if (mouse_over_window && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
       input_consumed = true;
-
-    if (window.close_requested) {
-      std::vector<Entity> to_destroy;
-
-      std::function<void(Entity)> collect_descendants = [&](Entity parent) {
-        ecs.group_view<UILayoutChildComponent>(
-          [&](Entity child, UILayoutChildComponent& layout) {
-            if (layout.parent.index == parent.index &&
-                layout.parent.version == parent.version) {
-              collect_descendants(child);
-              to_destroy.push_back(child);
-            }
-          });
-      };
-
-      collect_descendants(e);
-
-      for (Entity child : to_destroy) ecs.destroy_entity(child);
-
-      logger::info(
-        "[GUI] Closed window '{}' and cleaned up {} sub-entities "
-        "(entity:{}:{})",
-        window.title, to_destroy.size(), e.index, e.version);
-      ecs.destroy_entity(e);
-    }
   });
 }
 

@@ -27,6 +27,7 @@ struct UIWindowComponent {
   bool dragging = false;
   Vector2 drag_offset{0.f, 0.f};
   bool close_requested = false;
+  bool minimized = false;
 
   float scroll_y = 0.f;
   float content_height = 0.f;
