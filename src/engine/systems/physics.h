@@ -143,19 +143,21 @@ inline void CacheParticleEntities(ECS& ecs) {
     [&](Entity e, components::PositionComponent&) {
       particle_entities.push_back(e);
     });
-  
+
   size_t n = particle_entities.size();
   predicted_positions.resize(n);
   pos_cache.resize(n);
   vel_cache.resize(n);
   circ_cache.resize(n);
-  
+
   for (size_t i = 0; i < n; ++i) {
-    pos_cache[i] = &ecs.get<components::PositionComponent>(particle_entities[i]);
-    vel_cache[i] = &ecs.get<components::VelocityComponent>(particle_entities[i]);
+    pos_cache[i] =
+      &ecs.get<components::PositionComponent>(particle_entities[i]);
+    vel_cache[i] =
+      &ecs.get<components::VelocityComponent>(particle_entities[i]);
     circ_cache[i] = &ecs.get<components::CircleComponent>(particle_entities[i]);
   }
-  
+
   particle_entities_cached = true;
   logger::info("[PHYSICS] Cached {} particles", particle_entities.size());
 }
@@ -317,32 +319,39 @@ inline void PredictPositions(ECS& ecs, float dt) {
   if (!particle_entities_cached) {
     CacheParticleEntities(ecs);
   }
-  
+
   float gravity = cached_gravity_accel;
   size_t n = particle_entities.size();
   int effective = GetEffectiveThreads(n);
 
   if (effective > 1 && n >= 256) {
-    struct PredictTask { int start; int end; float grav; float dt; };
+    struct PredictTask {
+      int start;
+      int end;
+      float grav;
+      float dt;
+    };
     std::vector<pthread_t> threads(effective);
     std::vector<PredictTask> tasks(effective);
-    
+
     for (int ti = 0; ti < effective; ++ti) {
       tasks[ti].start = ti * n / effective;
       tasks[ti].end = (ti + 1) * n / effective;
       tasks[ti].grav = gravity;
       tasks[ti].dt = dt;
-      pthread_create(&threads[ti], nullptr, [](void* arg) -> void* {
-        auto* tk = (PredictTask*)arg;
-        for (int i = tk->start; i < tk->end; ++i) {
-          vel_cache[i]->velocity.y += tk->grav * tk->dt;
-          predicted_positions[i] = {
-            pos_cache[i]->position.x + vel_cache[i]->velocity.x * tk->dt,
-            pos_cache[i]->position.y + vel_cache[i]->velocity.y * tk->dt
-          };
-        }
-        return nullptr;
-      }, &tasks[ti]);
+      pthread_create(
+        &threads[ti], nullptr,
+        [](void* arg) -> void* {
+          auto* tk = (PredictTask*)arg;
+          for (int i = tk->start; i < tk->end; ++i) {
+            vel_cache[i]->velocity.y += tk->grav * tk->dt;
+            predicted_positions[i] = {
+              pos_cache[i]->position.x + vel_cache[i]->velocity.x * tk->dt,
+              pos_cache[i]->position.y + vel_cache[i]->velocity.y * tk->dt};
+          }
+          return nullptr;
+        },
+        &tasks[ti]);
     }
     for (int ti = 0; ti < effective; ++ti) pthread_join(threads[ti], nullptr);
   } else {
@@ -350,8 +359,7 @@ inline void PredictPositions(ECS& ecs, float dt) {
       vel_cache[i]->velocity.y += gravity * dt;
       predicted_positions[i] = {
         pos_cache[i]->position.x + vel_cache[i]->velocity.x * dt,
-        pos_cache[i]->position.y + vel_cache[i]->velocity.y * dt
-      };
+        pos_cache[i]->position.y + vel_cache[i]->velocity.y * dt};
     }
   }
 
@@ -730,6 +738,85 @@ inline void UpdateSelectionInput(
   if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
     entities::selection_locked = false;
     entities::selection_density = 0.f;
+  }
+}
+
+inline bool IsMouseOnCanvas(ECS& ecs, Vector2 mouse_world) {
+  bool on_canvas = false;
+  ecs.group_view<components::CanvasComponent>(
+    [&](Entity, components::CanvasComponent& canvas) {
+      Vector2 local_mouse = WorldToCanvasLocal(mouse_world, canvas);
+      if (local_mouse.x >= -canvas.half_extents.x &&
+          local_mouse.x <= canvas.half_extents.x &&
+          local_mouse.y >= -canvas.half_extents.y &&
+          local_mouse.y <= canvas.half_extents.y) {
+        on_canvas = true;
+      }
+    });
+  return on_canvas;
+}
+
+inline void UpdatePathInput(ECS& ecs,
+                            const engine::components::CameraComponent& cam) {
+  Vector2 mouse_screen = GetMousePosition();
+  Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, cam.camera);
+
+  bool ui_consumes = UIConsumesMouse(ecs, mouse_screen);
+  bool over_window = IsMouseOverAnyWindow(ecs, mouse_screen);
+
+  if (ui_consumes || over_window) {
+    return;
+  }
+
+  // Toggle drawing mode with 'P' key
+  static bool draw_key_was_down = false;
+  bool draw_key_down = IsKeyDown(KEY_P);
+  if (draw_key_down && !draw_key_was_down) {
+    entities::is_drawing_path = !entities::is_drawing_path;
+    if (entities::is_drawing_path) {
+      entities::user_path_points.clear();
+      if (IsMouseOnCanvas(ecs, mouse_world)) {
+        // Store in canvas-local coordinates
+        ecs.group_view<components::CanvasComponent>(
+          [&](Entity, components::CanvasComponent& canvas) {
+            entities::user_path_points.push_back(
+              WorldToCanvasLocal(mouse_world, canvas));
+          });
+      }
+    }
+  }
+  draw_key_was_down = draw_key_down;
+
+  // Continue drawing while in drawing mode and on canvas
+  if (entities::is_drawing_path && IsMouseOnCanvas(ecs, mouse_world)) {
+    if (!entities::user_path_points.empty()) {
+      // Convert last stored point (canvas-local) back to world for distance check
+      Vector2 last_world = mouse_world;
+      ecs.group_view<components::CanvasComponent>(
+        [&](Entity, components::CanvasComponent& canvas) {
+          last_world =
+            CanvasLocalToWorld(entities::user_path_points.back(), canvas);
+        });
+
+      float dx = mouse_world.x - last_world.x;
+      float dy = mouse_world.y - last_world.y;
+      float dist = sqrtf(dx * dx + dy * dy);
+
+      if (dist >= entities::path_point_spacing) {
+        // Store in canvas-local coordinates
+        ecs.group_view<components::CanvasComponent>(
+          [&](Entity, components::CanvasComponent& canvas) {
+            entities::user_path_points.push_back(
+              WorldToCanvasLocal(mouse_world, canvas));
+          });
+      }
+    } else {
+      ecs.group_view<components::CanvasComponent>(
+        [&](Entity, components::CanvasComponent& canvas) {
+          entities::user_path_points.push_back(
+            WorldToCanvasLocal(mouse_world, canvas));
+        });
+    }
   }
 }
 
@@ -1164,6 +1251,33 @@ inline void RenderMouseSelectionCircle(const components::CameraComponent& cam) {
   EndMode2D();
 }
 
+inline void RenderUserPath(ECS& ecs, const components::CameraComponent& cam) {
+  if (entities::user_path_points.size() < 2) return;
+
+  BeginMode2D(cam.camera);
+
+  Color path_color = GRAY;
+  float thickness = 4.f;
+
+  // Convert canvas-local points to world coordinates
+  std::vector<Vector2> world_points;
+  world_points.resize(entities::user_path_points.size());
+
+  ecs.group_view<components::CanvasComponent>(
+    [&](Entity, components::CanvasComponent& canvas) {
+      for (size_t i = 0; i < entities::user_path_points.size(); ++i) {
+        world_points[i] =
+          CanvasLocalToWorld(entities::user_path_points[i], canvas);
+      }
+    });
+
+  for (size_t i = 0; i < world_points.size() - 1; ++i) {
+    DrawLineEx(world_points[i], world_points[i + 1], thickness, path_color);
+  }
+
+  EndMode2D();
+}
+
 /**
  * ============================================================================
  * Collisions
@@ -1341,6 +1455,132 @@ inline void ResolveCollisions(ECS& ecs) {
       }
     }
   }
+
+  // Path collision
+  if (entities::user_path_points.size() >= 2) {
+    ecs.group_view<components::CanvasComponent>(
+      [&](Entity, components::CanvasComponent& canvas) {
+        // Convert all points to world coordinates
+        std::vector<Vector2> world_path;
+        world_path.resize(entities::user_path_points.size());
+        for (size_t i = 0; i < entities::user_path_points.size(); ++i) {
+          world_path[i] =
+            CanvasLocalToWorld(entities::user_path_points[i], canvas);
+        }
+
+        bool is_closed = false;
+        if (world_path.size() >= 3) {
+          float dx = world_path[0].x - world_path.back().x;
+          float dy = world_path[0].y - world_path.back().y;
+          if (sqrtf(dx * dx + dy * dy) < 20.f) is_closed = true;
+        }
+
+        ecs.group_view<components::PositionComponent,
+                       components::VelocityComponent,
+                       components::CircleComponent>(
+          [&](Entity, components::PositionComponent& pos,
+              components::VelocityComponent& vel,
+              components::CircleComponent& c) {
+            if (is_closed) {
+              // Check if particle is inside the closed polygon using raycasting
+              bool inside = false;
+              for (size_t i = 0, j = world_path.size() - 1;
+                   i < world_path.size(); j = i++) {
+                if (((world_path[i].y > pos.position.y) !=
+                     (world_path[j].y > pos.position.y)) &&
+                    (pos.position.x < (world_path[j].x - world_path[i].x) *
+                                          (pos.position.y - world_path[i].y) /
+                                          (world_path[j].y - world_path[i].y) +
+                                        world_path[i].x)) {
+                  inside = !inside;
+                }
+              }
+
+              if (inside) {
+                // Find closest point on polygon boundary
+                Vector2 closest_pt = world_path[0];
+                float min_dist_sq = FLT_MAX;
+
+                for (size_t i = 0; i < world_path.size(); ++i) {
+                  Vector2 a = world_path[i];
+                  Vector2 b = world_path[(i + 1) % world_path.size()];
+
+                  Vector2 ab = {b.x - a.x, b.y - a.y};
+                  Vector2 ap = {pos.position.x - a.x, pos.position.y - a.y};
+
+                  float ab_len_sq = ab.x * ab.x + ab.y * ab.y;
+                  if (ab_len_sq <= 0.f) continue;
+
+                  float t = (ap.x * ab.x + ap.y * ab.y) / ab_len_sq;
+                  t = Clamp(t, 0.f, 1.f);
+
+                  Vector2 closest = {a.x + t * ab.x, a.y + t * ab.y};
+                  float dx = pos.position.x - closest.x;
+                  float dy = pos.position.y - closest.y;
+                  float dist_sq = dx * dx + dy * dy;
+
+                  if (dist_sq < min_dist_sq) {
+                    min_dist_sq = dist_sq;
+                    closest_pt = closest;
+                  }
+                }
+
+                // Push particle OUTSIDE the polygon
+                float dx = pos.position.x - closest_pt.x;
+                float dy = pos.position.y - closest_pt.y;
+                float dist = sqrtf(min_dist_sq);
+                float nx = dx / dist;
+                float ny = dy / dist;
+
+                // Gently push toward boundary
+                float push = (c.radius + 2.f - dist) * 0.5f;
+                pos.position.x += nx * push;
+                pos.position.y += ny * push;
+
+                // Gently reflect velocity
+                float dot = vel.velocity.x * nx + vel.velocity.y * ny;
+                vel.velocity.x -= dot * nx * 0.5f;
+                vel.velocity.y -= dot * ny * 0.5f;
+              }
+            } else {
+              // Line segment collision for open paths
+              for (size_t i = 0; i < world_path.size() - 1; ++i) {
+                Vector2 a = world_path[i];
+                Vector2 b = world_path[i + 1];
+
+                Vector2 ab = {b.x - a.x, b.y - a.y};
+                Vector2 ap = {pos.position.x - a.x, pos.position.y - a.y};
+
+                float ab_len_sq = ab.x * ab.x + ab.y * ab.y;
+                if (ab_len_sq <= 0.f) continue;
+
+                float t = (ap.x * ab.x + ap.y * ab.y) / ab_len_sq;
+                t = Clamp(t, 0.f, 1.f);
+
+                Vector2 closest = {a.x + t * ab.x, a.y + t * ab.y};
+
+                float dx = pos.position.x - closest.x;
+                float dy = pos.position.y - closest.y;
+                float dist_sq = dx * dx + dy * dy;
+
+                if (dist_sq < c.radius * c.radius && dist_sq > 0.f) {
+                  float dist = sqrtf(dist_sq);
+                  float overlap = c.radius - dist;
+                  float nx = dx / dist;
+                  float ny = dy / dist;
+
+                  pos.position.x += nx * overlap;
+                  pos.position.y += ny * overlap;
+
+                  float dot = vel.velocity.x * nx + vel.velocity.y * ny;
+                  vel.velocity.x -= dot * nx * 0.5f;
+                  vel.velocity.y -= dot * ny * 0.5f;
+                }
+              }
+            }
+          });
+      });
+  }
 }
 
 /**
@@ -1434,7 +1674,7 @@ inline void SimulateFluid(ECS& ecs, float dt) {
 
   size_t n = particle_entities.size();
   for (size_t i = 0; i < n; ++i) {
-   components::CircleComponent* c = circ_cache[i];
+    components::CircleComponent* c = circ_cache[i];
     c->radius = entities::particle_size;
     c->particle_size = entities::particle_size;
   }

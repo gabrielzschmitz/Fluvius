@@ -51,6 +51,7 @@ static void UpdateApp(m_app::AppState& state, float dt) {
   m_eng::systems::SimulateFluid(state.ecs, dt);
 
   m_eng::systems::UpdateSelectionInput(state.ecs, cam);
+  m_eng::systems::UpdatePathInput(state.ecs, cam);
 
   m_eng::systems::UpdateSelectionDensity(state.ecs);
   m_eng::systems::UpdateDensityText(state.ecs);
@@ -79,6 +80,7 @@ static void RenderApp(m_app::AppState& state) {
     m_eng::systems::RenderFluid(state.ecs, cam);
 
   m_eng::systems::RenderMouseSelectionCircle(cam);
+  m_eng::systems::RenderUserPath(state.ecs, cam);
 
   EndMode2D();
 

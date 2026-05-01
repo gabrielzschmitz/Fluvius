@@ -66,6 +66,10 @@ inline Color particle_mid_low_color = {0, 255, 255, 190};   // cyan
 inline Color particle_mid_high_color = {255, 220, 0, 180};  // yellow
 inline Color particle_high_color = {255, 50, 50, 160};      // red
 
+inline std::vector<Vector2> user_path_points;
+inline bool is_drawing_path = false;
+inline const float path_point_spacing = 10.f;
+
 inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
                         bool centered = false) {
   fluid_particles.clear();
