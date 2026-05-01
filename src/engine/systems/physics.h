@@ -1256,7 +1256,7 @@ inline void RenderUserPath(ECS& ecs, const components::CameraComponent& cam) {
 
   BeginMode2D(cam.camera);
 
-  Color path_color = GRAY;
+  Color path_color = WHITE;
   float thickness = 4.f;
 
   // Convert canvas-local points to world coordinates

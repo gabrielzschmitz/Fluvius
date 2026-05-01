@@ -195,22 +195,11 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      physics_group);
 
   //
-  // Bounce checkbox
   //
-  engine::Entity checkbox = ecs.create_entity();
 
   ecs.add<engine::components::UILayoutChildComponent>(
-    checkbox, engine::components::UILayoutChildComponent{window, -1.f, 20.f});
 
-  ecs.add<engine::components::UIResolvedRectComponent>(checkbox);
 
-  ecs.add<engine::components::UICheckboxComponent>(
-    checkbox,
-    engine::components::UICheckboxComponent{
-      "Bounce", &bounce_enabled, [](bool value) { bounce_enabled = value; }});
-  ecs.add<engine::components::UITooltipComponent>(checkbox,
-                                                  "Toggle particle bouncing.");
-  ecs.add<engine::components::UIGroupChildComponent>(checkbox, physics_group);
 
   //
   // Number text

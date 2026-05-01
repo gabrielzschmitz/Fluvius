@@ -45,7 +45,6 @@ inline bool render_particle_velocity = true;
 inline float gravity = 1.0f;
 inline bool create_centered = 1.0f;
 inline float smoothing_radius = 50.f;
-inline bool bounce_enabled = true;
 inline bool is_paused = true;
 inline float sim_speed = 1.0f;
 
@@ -155,7 +154,6 @@ inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
 inline void ResetFluid(engine::ECS& ecs) {
   gravity = 1.0f;
   smoothing_radius = 50.f;
-  bounce_enabled = true;
   is_paused = true;
   sim_speed = 1.0f;
   create_centered = true;
