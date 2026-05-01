@@ -70,6 +70,9 @@ inline std::vector<Vector2> user_path_points;
 inline bool is_drawing_path = false;
 inline const float path_point_spacing = 1.f;
 
+inline bool needs_reset = false;
+inline bool particle_cache_dirty = true;
+
 inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
                         bool centered = false) {
   fluid_particles.clear();
@@ -176,12 +179,14 @@ inline void ResetFluid(engine::ECS& ecs) {
   selection_locked = false;
   selected_particle = {};
 
-  size_t particle_count = fluid_particles.size();
+  size_t particle_count = PARTICLE_NUMBER;
 
   for (auto e : fluid_particles)
     if (ecs.is_alive(e)) ecs.destroy_entity(e);
 
   CreateFluid(ecs, particle_count, create_centered);
+
+  particle_cache_dirty = true;
 }
 
 }  // namespace motrix::entities

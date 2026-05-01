@@ -163,7 +163,7 @@ inline void CreateUI(engine::ECS& ecs) {
 
   ecs.add<engine::components::UISliderComponent>(
     viscosity_slider, engine::components::UISliderComponent{
-                        "Viscosity", &viscosity, 0.1f, 20.f, 0.1f,
+                        "Viscosity", &viscosity, 0.f, 200.f, 1.f,
                         [](float value) { viscosity = value; }});
 
   ecs.add<engine::components::UITooltipComponent>(viscosity_slider,
@@ -218,24 +218,31 @@ inline void CreateUI(engine::ECS& ecs) {
                                                      physics_group);
 
   //
-  // Number text
+  // Particle count slider
   //
-  engine::Entity number_text = ecs.create_entity();
+  engine::Entity particle_count_slider = ecs.create_entity();
 
   ecs.add<engine::components::UILayoutChildComponent>(
-    number_text, engine::components::UILayoutChildComponent{window, 0.f, 20.f});
+    particle_count_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
 
-  ecs.add<engine::components::UIResolvedRectComponent>(number_text);
+  ecs.add<engine::components::UIResolvedRectComponent>(particle_count_slider);
 
-  ecs.add<engine::components::UITextComponent>(
-    number_text, engine::components::UITextComponent(
-                   "Particles: " +
-                   std::to_string(motrix::entities::fluid_particles.size())));
+  static float particle_count_value = (float)PARTICLE_NUMBER;
+
+  ecs.add<engine::components::UISliderComponent>(
+    particle_count_slider, engine::components::UISliderComponent{
+                             "Particle Count", &particle_count_value, 10.f,
+                             10000.f, 1.f, [](float value) {
+                               PARTICLE_NUMBER = (int)value;
+                               motrix::entities::needs_reset = true;
+                             }});
 
   ecs.add<engine::components::UITooltipComponent>(
-    number_text, "Displays the total number of particles in the simulation.");
+    particle_count_slider,
+    "Adjust the number of particles. Changes will reset the simulation.");
 
-  ecs.add<engine::components::UIGroupChildComponent>(number_text,
+  ecs.add<engine::components::UIGroupChildComponent>(particle_count_slider,
                                                      physics_group);
 
   // Density text
@@ -343,14 +350,16 @@ inline void CreateUI(engine::ECS& ecs) {
   ecs.add<engine::components::UIResolvedRectComponent>(reset_button);
 
   ecs.add<engine::components::UIButtonComponent>(
-    reset_button,
-    engine::components::UIButtonComponent{"Reset", false, [&ecs]() {
-                                            low_color_index = 3;
-                                            mid_color_index = 0;
-                                            high_color_index = 1;
+    reset_button, engine::components::UIButtonComponent{
+                    "Reset", false, [&ecs]() {
+                      low_color_index = 3;
+                      mid_color_index = 0;
+                      high_color_index = 1;
 
-                                            motrix::entities::ResetFluid(ecs);
-                                          }});
+                      PARTICLE_NUMBER = 1024;
+                      motrix::entities::needs_reset = true;
+                      particle_count_value = 1024.0f;
+                    }});
   ecs.add<engine::components::UITooltipComponent>(
     reset_button, "Restore all settings to factory defaults.");
   ecs.add<engine::components::UIGroupChildComponent>(reset_button,

@@ -66,6 +66,7 @@ inline int current_task_idx = 0;
 inline int total_tasks = 0;
 inline void* (*task_func)(void*) = nullptr;
 inline void* task_user_data = nullptr;
+inline pthread_mutex_t sim_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 inline void* ThreadWorker(void* arg) {
   int tid = *(int*)arg;
@@ -673,8 +674,8 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
     v1.velocity.x += pressure_forces[i].x * dt;
     v1.velocity.y += pressure_forces[i].y * dt;
 
-    v1.velocity.x += viscosity_forces[i].x * viscosity;
-    v1.velocity.y += viscosity_forces[i].y * viscosity;
+    v1.velocity.x += viscosity_forces[i].x * viscosity * 50.f;
+    v1.velocity.y += viscosity_forces[i].y * viscosity * 50.f;
 
     v1.velocity.x += cohesion_forces[i].x * surface_tension * mass;
     v1.velocity.y += cohesion_forces[i].y * surface_tension * mass;
@@ -1664,6 +1665,11 @@ inline void ComputeParticleDensity(ECS& ecs) {
  * ============================================================================
  */
 inline void SimulateFluid(ECS& ecs, float dt) {
+  if (entities::particle_cache_dirty || !particle_entities_cached) {
+    CacheParticleEntities(ecs);
+    entities::particle_cache_dirty = false;
+  }
+
   if (entities::is_paused) return;
 
   UpdateKernelCache();

@@ -44,6 +44,11 @@ static void InitApp(m_app::AppState& state) {
 }
 
 static void UpdateApp(m_app::AppState& state, float dt) {
+  if (motrix::entities::needs_reset) {
+    motrix::entities::ResetFluid(state.ecs);
+    motrix::entities::needs_reset = false;
+  }
+
   auto& cam =
     state.ecs.get<m_eng::components::CameraComponent>(state.cameraEntity);
   m_eng::systems::UpdateCanvasInteraction(state.ecs, cam);
