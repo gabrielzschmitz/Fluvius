@@ -1,0 +1,56 @@
+%Ajustes na legenda da figura. Incluindo espacamento apos a legenda
+\captionsetup[figure]{labelformat={default},labelsep=period,font=footnotesize, name=\footnotesize{Fig.},justification=centering,singlelinecheck=false,belowskip=0\normalbaselineskip}
+%\pagenumbering{gobble}
+
+%Ajustes na legenda da tabela. 
+%\captionsetup[table]{labelformat={default},labelsep=newline,font={sc,footnotesize},justification=centering,singlelinecheck=false}
+\captionsetup[table]{format=plain,labelformat=simple,labelsep=period,justification=raggedright,singlelinecheck=false,skip=0pt,font=small}
+
+%\renewcommand{\headrulewidth}{0pt}
+
+\makeatletter
+\newcommand{\linebreakand}{%
+	\baselineskip
+	\end{@IEEEauthorhalign}
+	\hfill\mbox{}\par
+	\mbox{}\hfill\begin{@IEEEauthorhalign}
+}
+\makeatother
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    Configuracaoes de Idioma
+%    Considerando babel = brazil
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+
+% \addto\captionsbrazil{
+%   \renewcommand{\abstractname}{Abstract}
+%   \renewcommand{\figurename}{Figura}
+%   \renewcommand{\tablename}{Tabela}
+% }
+%
+% %considerando babel = english
+% \addto\captionsenglish{
+%   \renewcommand{\tablename}{Table}
+% }
+
+% Define custom colors for syntax highlighting
+\definecolor{keywordcolor}{rgb}{0.0, 0.0, 1.0} % Blue for keywords
+\definecolor{stringcolor}{rgb}{0.0, 0.5, 0.0}  % Green for strings
+\definecolor{commentcolor}{rgb}{0.5, 0.5, 0.5} % Gray for comments
+\definecolor{backgroundcolor}{rgb}{1, 1, 1} % Light background
+
+% Configure listings style for C code
+\lstdefinestyle{mystyle}{
+	backgroundcolor=\color{white}, % Set background color
+	basicstyle=\ttfamily\footnotesize,       % Font size and type
+	keywordstyle=\color{keywordcolor}\bfseries, % Keywords in blue and bold
+	stringstyle=\color{stringcolor},          % Strings in green
+	commentstyle=\color{commentcolor}\itshape, % Comments in gray and italic
+	%numbers=left,                            % Line numbers on the left
+	%numberstyle=\tiny\color{gray},           % Style of line numbers
+	%stepnumber=1,                            % Line number step
+	%numbersep=5pt,                           % Space between line numbers and code
+	tabsize=2,                               % Tab size
+	breaklines=true                          % Break long lines
+}

@@ -1,0 +1,30 @@
+\documentclass[10pt,conference,twocolumn]{style}
+\input{config/includes.tex}
+\input{config/config.tex}
+\bibliography{ref.bib}
+
+\begin{document}
+
+\title{Simulação de Fluídos SPH usando ECS}
+\author{
+	\IEEEauthorblockN{Gabriel dos Santos Schmitz}
+	\IEEEauthorblockA{RA 2487438, Engenharia de Computação, \\
+		\faEnvelope\ gabrielzschmitz@protonmail.com}
+}
+
+\maketitle
+\setlength{\textfloatsep}{0pt}  % Reduce space between figure and text
+\setlength{\intextsep}{0pt}     % Remove space above/below the figure when inline
+\setlength{\floatsep}{0pt}      % Remove space between floats
+\input{sections/01-introducao.tex}
+\input{sections/02-metodologia.tex}
+\input{sections/03-resultados.tex}
+\input{sections/04-discussao.tex}
+\input{sections/05-conclusao.tex}
+
+\setlength{\bibitemsep}{10pt}
+\clearpage
+\onecolumn
+\printbibliography
+
+\end{document}

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Check if a .tex file is provided as an argument
+if [ -z "$1" ]; then
+    echo "Usage: $0 <file.tex>"
+    exit 1
+fi
+
+# Get the filename without the extension
+filename="${1%.*}"
+
+# Open a new terminal and run texcomp with the filename (without extension)
+st -e bash -c "find . -name '*.tex' | entr -r ./texcomp ${filename}.tex" &
+
+# Open another terminal and run zathura with the generated PDF
+st -e bash -c "devour zathura ${filename}.pdf" &
+
+# Open the original terminal with nvim to edit the .tex file
+nvim "$1"

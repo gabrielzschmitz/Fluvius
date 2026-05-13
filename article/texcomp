@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Ensure a file is provided
+if [ -z "$1" ]; then
+  echo -e "\033[1;31mOops! No file given! Please provide a .tex file.\033[0m"
+  echo -e "Usage: $0 <file.tex>"
+  exit 1
+fi
+
+FILE="$1"
+BASENAME="${FILE%.tex}" # Remove .tex extension
+AUX_DIR=".aux"
+
+# Create .aux directory if it doesn't exist and remove content if there's any
+mkdir -p "$AUX_DIR"
+rm -rf "$AUX_DIR"/*
+
+# Run latexmk
+echo -e "\033[1;34mRunning latexmk 💾...\033[0m"
+latexmk -pdf -f -bibtex -silent "$FILE" > /dev/null 2>&1
+
+# Move specific auxiliary files to .aux
+for ext in aux bbl bcf blg fdb_latexmk fls log pdfxref run.xml out bbl-SAVE-ERROR bcf-SAVE-ERROR; do
+  if [ -f "$BASENAME.$ext" ]; then
+    mv "$BASENAME.$ext" "$AUX_DIR"
+    echo -e "\033[1;32mMoved $BASENAME.$ext to $AUX_DIR 🚚\033[0m"
+  fi
+done
+
+# Move indent.log separately since it doesn't have the basename prefix
+if [ -f "indent.log" ]; then
+  mv "indent.log" "$AUX_DIR"
+  echo -e "\033[1;32mMoved indent.log to $AUX_DIR 🎉\033[0m"
+fi
+
+echo -e "\033[1;33mCompilation complete 🎉!\033[0m"
