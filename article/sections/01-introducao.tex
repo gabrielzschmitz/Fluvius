@@ -1,9 +1,70 @@
 \section{Introdução}
+\label{sec:introducao}
 
-A introdução deve contextualizar o tema do estudo, apresentando sua relevância,
-os objetivos do trabalho e a estrutura do artigo. Também pode incluir uma
-revisão sucinta da literatura para situar o leitor.
+% A introdução deve contextualizar o tema do estudo, apresentando sua relevância,
+% os objetivos do trabalho e a estrutura do artigo. Também pode incluir uma
+% revisão sucinta da literatura para situar o leitor.
 
-\citetitle{zill2001equacoes} \cite{zill2001equacoes}; 
-\citetitle{boyce2006equacoes} \cite{boyce2006equacoes}; 
-\citetitle{brannan2008equacoes} \cite{brannan2008equacoes}; 
+A simulação computacional de fluidos possui ampla aplicação em áreas como
+computação gráfica, engenharia, jogos digitais e simulações científicas.
+Métodos capazes de reproduzir o comportamento dinâmico de líquidos e gases são
+utilizados para modelar fenômenos físicos complexos, permitindo análises,
+visualizações e experimentações de forma virtual. Entretanto, a simulação de
+fluidos em tempo real ainda representa um desafio computacional significativo,
+principalmente devido à grande quantidade de cálculos necessários para
+representar interações físicas entre partículas.
+
+Entre os métodos utilizados para simulação de fluidos, destaca-se o
+\textit{Smoothed Particle Hydrodynamics} (SPH), uma abordagem baseada em
+partículas originalmente introduzida por Lucy \cite{lucy1977numerical} e por
+Gingold e Monaghan \cite{gingold1977smoothed}. O método discretiza o fluido em
+pequenos elementos independentes, denominados partículas, permitindo a
+aproximação das propriedades físicas do fluido por meio da interação entre seus
+vizinhos. Diferentemente de métodos baseados em malhas, o SPH apresenta maior
+flexibilidade para representar superfícies livres, respingos e deformações
+complexas, tornando-se amplamente utilizado em aplicações interativas e
+gráficas computacionais.
+
+Na área de computação gráfica, o trabalho \textit{Particle-Based Fluid
+Simulation for Interactive Applications} \cite{muller2003particle}, de
+\citeauthor{muller2003particle}, consolidou o uso do SPH em aplicações
+interativas ao propor uma abordagem voltada para simulação de fluidos em tempo
+real. Os autores demonstraram que métodos baseados em partículas podem
+simplificar o tratamento das equações de conservação de massa e facilitar a
+representação de superfícies livres, além de permitir a renderização direta das
+partículas para reconstrução visual do fluido.
+
+Apesar de suas vantagens, implementações de SPH podem apresentar limitações de
+desempenho devido à necessidade de atualização contínua do estado de milhares
+de partículas e do cálculo frequente de vizinhança. Nesse contexto,
+arquiteturas orientadas a dados, como o \textit{Entity Component System} (ECS),
+surgem como uma alternativa para melhorar organização, modularidade e
+eficiência computacional. O ECS, popularizado por Scott Bilas na apresentação
+\textit{A Data-Driven Game Object System} \cite{bilas2002}, propõe a separação
+entre dados e comportamento por meio de componentes independentes, favorecendo
+melhor utilização de memória, maior flexibilidade estrutural e potencial para
+paralelismo durante a execução.
+
+Este trabalho apresenta o desenvolvimento de uma simulação de fluidos
+utilizando o método SPH integrado à arquitetura ECS. A implementação foi
+desenvolvida de forma incremental, iniciando pela modelagem individual de
+partículas sujeitas a forças básicas, como gravidade e colisão, evoluindo
+posteriormente para a interação entre múltiplas partículas por meio das
+equações de Navier-Stokes, formuladas por Claude-Louis Navier e posteriormente
+desenvolvidas por George Gabriel Stokes \cite{kline1972}, amplamente utilizadas
+na modelagem do movimento de fluidos viscosos
+\cite{batchelor1967,landau1987,ferziger2002}, e como princípios para o método
+SPH \cite{monaghan2005}. O objetivo é investigar como a adoção do ECS pode
+contribuir para a organização estrutural do sistema e para a execução eficiente
+das etapas da simulação, mantendo resultados visuais coerentes e estabilidade
+física.
+
+O restante deste artigo está organizado da seguinte forma: a Seção
+\ref{sec:metodologia} descreve os fundamentos teóricos do método SPH e da
+arquitetura ECS, bem como os procedimentos incrementais utilizados na
+implementação da simulação; a Seção \ref{sec:resultados} apresenta os
+resultados obtidos a partir da execução do sistema desenvolvido; a Seção
+\ref{sec:discussao} analisa os resultados observados, discutindo limitações,
+impactos e possíveis melhorias da abordagem proposta; por fim, a Seção
+\ref{sec:conclusao} resume as principais contribuições do trabalho e apresenta
+perspectivas para trabalhos futuros.

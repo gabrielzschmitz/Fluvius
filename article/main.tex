@@ -7,12 +7,43 @@
 
 \title{Simulação de Fluídos SPH usando ECS}
 \author{
-	\IEEEauthorblockN{Gabriel dos Santos Schmitz}
-	\IEEEauthorblockA{RA 2487438, Engenharia de Computação, \\
-		\faEnvelope\ gabrielzschmitz@protonmail.com}
+  \IEEEauthorblockN{Gabriel dos Santos Schmitz}
+  \IEEEauthorblockA{
+    Universidade Tecnológica Federal do Paraná (UTFPR) \\
+    Engenharia de Computação, RA: 2487438 \\
+    \href{mailto:gabrielzschmitz@protonmail.com}{\faEnvelope\ gabrielzschmitz@protonmail.com}
+  }
 }
 
 \maketitle
+
+\begin{resumo}
+% O resumo deve conter uma breve introdução ao tema, os objetivos do estudo, a
+%   metodologia utilizada, os principais resultados e as conclusões obtidas. Deve
+%   ter entre 150 e 250 palavras.
+
+A simulação de fluidos em tempo real exige grande capacidade computacional
+  devido ao cálculo contínuo das interações entre partículas. Entre os métodos
+  utilizados nesse contexto, o \textit{Smoothed Particle Hydrodynamics} (SPH)
+  destaca-se por representar fluidos sem o uso de malhas estruturadas.
+
+  Este trabalho apresenta o desenvolvimento de uma simulação de fluidos baseada
+  em SPH integrada à arquitetura \textit{Entity Component System} (ECS). A
+  proposta utiliza o ECS para organizar os dados da aplicação de forma modular,
+  buscando melhorar a estrutura do sistema e a eficiência da execução da
+  simulação.
+\end{resumo}
+
+\begin{palavraschave}
+% (Indicar de 3 a 5 palavras-chave que representem o conteúdo do artigo,
+%   separadas por vírgula)
+
+Simulação de fluidos, Smoothed Particle Hydrodynamics, Entity Component System,
+  Computação gráfica, Arquiteturas orientadas a dados
+\end{palavraschave}
+
+\IEEEpeerreviewmaketitle
+
 \setlength{\textfloatsep}{0pt}  % Reduce space between figure and text
 \setlength{\intextsep}{0pt}     % Remove space above/below the figure when inline
 \setlength{\floatsep}{0pt}      % Remove space between floats

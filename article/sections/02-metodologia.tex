@@ -1,6 +1,250 @@
 \section{Metodologia}
+\label{sec:metodologia}
 
-Nesta seção, descreva os materiais e métodos utilizados na pesquisa. Inclua
-informações sobre os procedimentos adotados, teoria utilizada, equipamentos,
-ferramentas computacionais e qualquer outra informação relevante para a
-reprodução do estudo.
+% Nesta seção, descreva os materiais e métodos utilizados na pesquisa. Inclua
+% informações sobre os procedimentos adotados, teoria utilizada, equipamentos,
+% ferramentas computacionais e qualquer outra informação relevante para a
+% reprodução do estudo.
+
+As equações de Navier-Stokes descrevem o comportamento de fluidos em movimento
+a partir da conservação de massa e da conservação de quantidade de movimento.
+Para fluidos incompressíveis, essas equações permitem modelar os efeitos de
+pressão, viscosidade e forças externas sobre o escoamento do fluido.
+
+Embora as equações de Navier-Stokes permitam descrever com precisão o
+comportamento de fluidos, sua resolução direta na forma contínua pode se tornar
+computacionalmente custosa, principalmente em aplicações que exigem atualização
+em tempo real. Isso ocorre porque fluidos são compostos por um número muito
+grande de partículas interagindo simultaneamente, tornando inviável calcular de
+forma exata todas as interações físicas presentes no sistema.
+
+Dessa forma, métodos numéricos são utilizados para discretizar o fluido e
+aproximar seu comportamento de maneira computacionalmente viável. Entre essas
+abordagens, destacam-se os métodos particulados, nos quais o fluido é
+representado por um conjunto discreto de partículas interagindo localmente.
+
+Nesse contexto, o método \textit{Smoothed Particle Hydrodynamics} (SPH),
+originalmente proposto por Lucy \cite{lucy1977numerical} e por Gingold e
+Monaghan \cite{gingold1977smoothed}, tornou-se uma das principais técnicas
+baseadas em partículas para simulação de fluidos.
+
+No método SPH, cada partícula representa uma pequena porção do fluido e
+armazena propriedades físicas locais, como massa, densidade, pressão e
+velocidade. Entretanto, representar diretamente todas as partículas presentes
+em um fluido real seria computacionalmente inviável, já que fluidos podem ser
+compostos por milhões de partículas interagindo simultaneamente.
+
+Para tornar a simulação viável computacionalmente, o SPH aproxima o
+comportamento contínuo do fluido utilizando uma quantidade significativamente
+menor de partículas. Para isso, o método emprega funções de suavização
+denominadas \textit{smoothing kernels}, responsáveis por distribuir a
+influência de cada partícula dentro de uma região limitada do espaço.
+
+Em vez de tratar cada partícula como um ponto isolado, o kernel espalha suas
+propriedades físicas ao redor de sua vizinhança, permitindo interpolar
+grandezas físicas de forma contínua entre partículas vizinhas. Na prática, esse
+processo atua de maneira semelhante a um filtro de suavização (\textit{blur}),
+reduzindo espaços vazios e descontinuidades entre partículas. Com isso, mesmo
+utilizando uma quantidade reduzida de partículas, o sistema passa a apresentar
+comportamento visual e físico semelhante ao de um fluido contínuo.
+
+\begin{figure}[H]
+	\centering
+	\setlength{\fboxsep}{0pt}
+	\includegraphics[width=0.49\textwidth]{./fig/fig1.png}
+  \caption{Mesma distribuição de partículas discretas antes e após a aplicação do
+  kernel de suavização no método SPH.}
+	\label{fig:fig1}
+\end{figure}
+
+A partir dessa representação particulada, torna-se possível aproximar as
+equações da mecânica dos fluidos diretamente sobre o conjunto de partículas. No
+SPH, as equações de Navier-Stokes são discretizadas de forma que propriedades
+como pressão, viscosidade e aceleração possam ser calculadas localmente a
+partir da interação entre partículas vizinhas.
+
+A forma geral da equação de conservação de momento é apresentada na
+Equação \ref{eq:navier_stokes_momentum_general}:
+
+\begin{equation}
+\rho \frac{\mathrm{D}\mathbf{u}}{\mathrm{D}t}
+=
+-\nabla p
++
+\nabla \cdot \boldsymbol{\tau}
++
+\rho \mathbf{g},
+\label{eq:navier_stokes_momentum_general}
+\end{equation}
+
+em que \(\frac{\mathrm{D}}{\mathrm{D}t}\) representa a derivada material,
+\(\boldsymbol{\tau}\) corresponde ao tensor de tensões viscosas, \(p\)
+representa a pressão, \(\rho\) a densidade do fluido, \(\mathbf{u}\) o campo de
+velocidades e \(\mathbf{g}\) as forças externas aplicadas ao sistema.
+
+Para fluidos Newtonianos incompressíveis com viscosidade constante, o termo
+viscoso pode ser simplificado conforme a Equação \ref{eq:viscous_term}:
+
+\begin{equation}
+\nabla \cdot \boldsymbol{\tau}
+=
+\mu \nabla^2 \mathbf{u},
+\label{eq:viscous_term}
+\end{equation}
+
+em que \(\mu\) representa a viscosidade dinâmica do fluido. Além disso, a
+derivada material do campo de velocidades corresponde à aceleração do fluido:
+
+\begin{equation}
+\frac{\mathrm{D}\mathbf{u}}{\mathrm{D}t}
+=
+\mathbf{a}.
+\label{eq:material_derivative}
+\end{equation}
+
+Substituindo as Equações \ref{eq:viscous_term} e \ref{eq:material_derivative}
+na Equação \ref{eq:navier_stokes_momentum_general}, obtém-se:
+
+\begin{equation}
+\rho \mathbf{a}
+=
+-\nabla p
++
+\mu \nabla^2 \mathbf{u}
++
+\rho \mathbf{g}.
+\label{eq:navier_stokes_intermediate}
+\end{equation}
+
+Dividindo todos os termos pela densidade \(\rho\) e definindo a viscosidade
+cinemática como:
+
+\begin{equation}
+\nu = \frac{\mu}{\rho},
+\label{eq:kinematic_viscosity}
+\end{equation}
+
+obtém-se a forma simplificada das equações de Navier-Stokes utilizada neste
+trabalho:
+
+\begin{equation}
+\mathbf{a}
+=
+-\frac{\nabla p}{\rho}
++
+\nu \nabla^2 \mathbf{u}
++
+\mathbf{g},
+\label{eq:navier_stokes_momentum}
+\end{equation}
+
+em que \(\mathbf{a}\) representa a aceleração do fluido, \(p\) a pressão,
+\(\rho\) a densidade, \(\nu\) a viscosidade cinemática, \(\mathbf{u}\) o campo
+de velocidades e \(\mathbf{g}\) as forças externas aplicadas ao sistema, como a
+gravidade.
+
+Nessa formulação, o termo do gradiente de pressão acelera o fluido de regiões
+de maior pressão para regiões de menor pressão. O termo viscoso representa a
+dissipação interna do fluido, suavizando diferenças de velocidade entre regiões
+vizinhas, enquanto o termo de forças externas adiciona acelerações provocadas
+por agentes externos.
+
+Além da conservação de momento, fluidos incompressíveis devem satisfazer a
+condição de conservação de massa, apresentada na Equação
+\ref{eq:navier_stokes_incompressibility}:
+
+\begin{equation}
+\nabla \cdot \mathbf{u} = 0,
+\label{eq:navier_stokes_incompressibility}
+\end{equation}
+
+indicando que a divergência do campo de velocidades é nula. Isso significa que
+a quantidade de fluido que entra em uma região é igual à quantidade que sai,
+mantendo a densidade aproximadamente constante ao longo da simulação.
+
+% A aproximação de uma grandeza escalar \(A\) na posição \(r\) é dada pela
+% Equação \ref{eq:sph_interpolation}:
+%
+% \begin{equation}
+% A_S(r) =
+% \sum_j
+% m_j \frac{A_j}{\rho_j}
+% W(r - r_j, h),
+% \label{eq:sph_interpolation}
+% \end{equation}
+%
+% em que \(m_j\) representa a massa da partícula \(j\), \(A_j\) a grandeza física
+% associada à partícula, \(\rho_j\) sua densidade, \(r_j\) sua posição e \(W(r -
+% r_j, h)\) o kernel de suavização com raio de suporte \(h\).
+%
+% O kernel define como a influência de uma partícula diminui com a distância.
+% Para garantir estabilidade e precisão numérica, a função kernel deve ser
+% normalizada, conforme mostrado na Equação \ref{eq:kernel_normalization}:
+%
+% \begin{equation}
+% \int W(r)\,dr = 1,
+% \label{eq:kernel_normalization}
+% \end{equation}
+%
+% garantindo que a soma das contribuições preserve as propriedades físicas do
+% fluido.
+%
+% Cada partícula representa um pequeno volume do fluido, definido pela razão
+% entre massa e densidade:
+%
+% \begin{equation}
+% V_i = \frac{m_i}{\rho_i},
+% \label{eq:particle_volume}
+% \end{equation}
+%
+% em que a massa permanece constante ao longo da simulação, enquanto a densidade
+% varia dinamicamente conforme a distribuição espacial das partículas vizinhas.
+%
+% A densidade local do fluido pode ser calculada diretamente pelas contribuições
+% das partículas vizinhas, conforme a Equação \ref{eq:sph_density}:
+%
+% \begin{equation}
+% \rho_S(r) =
+% \sum_j
+% m_j
+% W(r - r_j, h),
+% \label{eq:sph_density}
+% \end{equation}
+%
+% permitindo estimar regiões de compressão e expansão do fluido.
+%
+% Além da interpolação de grandezas escalares, o SPH também permite aproximar os
+% operadores diferenciais presentes nas equações de Navier-Stokes. Nesse caso, as
+% derivadas são aplicadas diretamente ao kernel de suavização.
+%
+% O gradiente de uma grandeza escalar \(A\) pode ser aproximado pela Equação
+% \ref{eq:sph_gradient}:
+%
+% \begin{equation}
+% \nabla A_S(r) =
+% \sum_j
+% m_j \frac{A_j}{\rho_j}
+% \nabla W(r - r_j, h),
+% \label{eq:sph_gradient}
+% \end{equation}
+%
+% enquanto o operador Laplaciano é aproximado pela Equação
+% \ref{eq:sph_laplacian}:
+%
+% \begin{equation}
+% \nabla^2 A_S(r) =
+% \sum_j
+% m_j \frac{A_j}{\rho_j}
+% \nabla^2 W(r - r_j, h).
+% \label{eq:sph_laplacian}
+% \end{equation}
+%
+% Essas aproximações permitem discretizar os termos das equações de Navier-Stokes
+% diretamente sobre as partículas, possibilitando simular o comportamento
+% contínuo do fluido por meio de interações locais entre partículas vizinhas.
+%
+% Apesar de sua flexibilidade e simplicidade de implementação, o método SPH
+% apresenta limitações numéricas, como instabilidades, perda de conservação de
+% momento e assimetrias nas forças entre partículas. Por esse motivo,
+% implementações práticas normalmente incorporam técnicas adicionais de
+% estabilização para preservar a consistência física da simulação.
