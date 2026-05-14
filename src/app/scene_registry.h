@@ -1,0 +1,50 @@
+// app/scene_registry.h
+#pragma once
+
+#include "app/scene.h"
+#include "app/scenes/fluid_sim.h"
+#include "app/scenes/kernel_demo.h"
+
+namespace motrix::app {
+
+namespace m_ett = motrix::entities;
+
+namespace Scenes {
+
+constexpr Scene FLUID_SIM{"fluid", InitFluidSim, UpdateFluidSim, RenderFluidSim,
+                          m_ett::CreateUI};
+constexpr Scene KERNEL_DEMO{"kernel", InitKernelDemo, UpdateKernelDemo,
+                            RenderKernelDemo, m_ett::CreateKernelDemoUI};
+
+inline const Scene& Get(SceneType type) {
+  switch (type) {
+    case SceneType::FLUID_SIM:
+      return FLUID_SIM;
+    case SceneType::KERNEL_DEMO:
+      return KERNEL_DEMO;
+  }
+  return FLUID_SIM;
+}
+
+struct NameEntry {
+  const char* name;
+  SceneType type;
+};
+
+constexpr NameEntry SCENE_NAMES[] = {
+  {"fluid", SceneType::FLUID_SIM},
+  {"kernel", SceneType::KERNEL_DEMO},
+};
+
+inline SceneType FindByName(const char* name) {
+  for (const auto& entry : SCENE_NAMES) {
+    if (strcmp(entry.name, name) == 0) {
+      return entry.type;
+    }
+  }
+  return SceneType::FLUID_SIM;
+}
+
+}  // namespace Scenes
+
+}  // namespace motrix::app

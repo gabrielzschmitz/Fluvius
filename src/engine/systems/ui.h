@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "../../entities/ui.h"
+#include "../../app/scene.h"
 #include "../components/ui.h"
 #include "../ecs/ecs.h"
 #include "raymath.h"
@@ -329,10 +329,13 @@ inline void RenderSliders(ECS& ecs, Entity window_entity, float scroll_y,
 
     Rectangle bar{rect.x, rect.y + 14 * uiScale, rect.width, 16 * uiScale};
 
-    int decimal_places = (slider.step >= 0.1f) ? 1 : (slider.step >= 0.01f) ? 2 : (slider.step >= 0.001f) ? 3 : 4;
+    int decimal_places = (slider.step >= 0.1f)     ? 1
+                         : (slider.step >= 0.01f)  ? 2
+                         : (slider.step >= 0.001f) ? 3
+                                                   : 4;
     const char* fmt = TextFormat("%%s: %%.%df", decimal_places);
     DrawText(TextFormat(fmt, slider.label.c_str(), current_val), rect.x, rect.y,
-              10 * uiScale, BLACK);
+             10 * uiScale, BLACK);
 
     DrawRectangleRec(bar, {223, 223, 223, 255});
     DrawRectangleLinesEx(bar, 1 * uiScale, BLACK);
@@ -612,7 +615,8 @@ inline void RenderTooltips(ECS& ecs, float scroll_y, bool input_consumed) {
   }
 }
 
-inline void RenderWindow(ECS& ecs, bool& input_consumed) {
+inline void RenderWindow(ECS& ecs, bool& input_consumed,
+                         motrix::app::SceneType sceneType) {
   Vector2 mouse = GetMousePosition();
 
   if (IsKeyPressed(KEY_F10)) {
@@ -624,7 +628,8 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed) {
     });
 
     if (!has_window) {
-      motrix::entities::CreateUI(ecs);
+      const auto& scene = motrix::app::Scenes::Get(sceneType);
+      if (scene.create_ui) scene.create_ui(ecs);
       return;
     }
   }
@@ -776,14 +781,15 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed) {
   });
 }
 
-inline void RenderUI(ECS& ecs) {
+inline void RenderUI(ECS& ecs, motrix::app::SceneType sceneType =
+                                 motrix::app::SceneType::FLUID_SIM) {
   LayoutUI(ecs);
 
   bool input_consumed = false;
 
   PrepassDropdownInput(ecs, input_consumed);
 
-  RenderWindow(ecs, input_consumed);
+  RenderWindow(ecs, input_consumed, sceneType);
 }
 
 }  // namespace motrix::engine::systems

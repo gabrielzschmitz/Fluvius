@@ -3,6 +3,7 @@
 
 #include <cmath>
 
+#include "../../entities/fluid.h"
 #include "../components/camera.h"
 #include "../components/canvas.h"
 #include "../ecs/ecs.h"
