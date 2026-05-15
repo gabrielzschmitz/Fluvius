@@ -4,6 +4,7 @@
 #include "app/scene.h"
 #include "app/scenes/fluid_sim.h"
 #include "app/scenes/kernel_demo.h"
+#include "app/scenes/smoothing_demo.h"
 
 namespace motrix::app {
 
@@ -15,6 +16,8 @@ constexpr Scene FLUID_SIM{"fluid", InitFluidSim, UpdateFluidSim, RenderFluidSim,
                           m_ett::CreateUI};
 constexpr Scene KERNEL_DEMO{"kernel", InitKernelDemo, UpdateKernelDemo,
                             RenderKernelDemo, m_ett::CreateKernelDemoUI};
+constexpr Scene SMOOTHING_DEMO{"smoothing", InitSmoothingDemo, UpdateSmoothingDemo,
+                               RenderSmoothingDemo, m_ett::CreateSmoothingDemoUI};
 
 inline const Scene& Get(SceneType type) {
   switch (type) {
@@ -22,6 +25,8 @@ inline const Scene& Get(SceneType type) {
       return FLUID_SIM;
     case SceneType::KERNEL_DEMO:
       return KERNEL_DEMO;
+    case SceneType::SMOOTHING_DEMO:
+      return SMOOTHING_DEMO;
   }
   return FLUID_SIM;
 }
@@ -34,6 +39,7 @@ struct NameEntry {
 constexpr NameEntry SCENE_NAMES[] = {
   {"fluid", SceneType::FLUID_SIM},
   {"kernel", SceneType::KERNEL_DEMO},
+  {"smoothing", SceneType::SMOOTHING_DEMO},
 };
 
 inline SceneType FindByName(const char* name) {
