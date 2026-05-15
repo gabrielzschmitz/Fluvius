@@ -128,13 +128,13 @@ inline void CreateKernelDemoUI(engine::ECS& ecs) {
               250.f,
               70.f,
               "Kernel Demo Controls"});
-  ecs.get<engine::components::UIWindowComponent>(window).auto_height = false;
+  ecs.get<engine::components::UIWindowComponent>(window).auto_height = true;
 
   engine::Entity blur_slider = ecs.create_entity();
 
   ecs.add<engine::components::UILayoutChildComponent>(
     blur_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 10.f});
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
 
   ecs.add<engine::components::UIResolvedRectComponent>(blur_slider);
 

@@ -6,6 +6,7 @@
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
 #include "engine/systems/canvas.h"
+#include "raylib.h"
 
 namespace motrix::engine::components {
 
@@ -17,8 +18,9 @@ struct SmoothingParticleTag {
 
 namespace motrix::engine::systems {
 
-inline float smoothing_radius = 80.f;
-inline float strength = 200.f;
+inline float smoothing_radius = 160.f;
+inline float strength = 50.f;
+inline float particle_size = 8.f;
 
 inline void CreateSmoothingDemo(ECS& ecs) {
   Entity e = ecs.create_entity();
@@ -45,7 +47,10 @@ inline void RenderSmoothing(ECS& ecs, const components::CameraComponent& cam) {
         Color{1, 64, 126, static_cast<unsigned char>(strength)});
       Vector2 edge_pos{pos.position.x + smoothing_radius, pos.position.y};
       DrawLineEx(pos.position, edge_pos, line_width, Color{255, 255, 255, 255});
-      DrawCircleV(pos.position, circ.radius, circ.color);
+      Vector2 label_pos{pos.position.x + smoothing_radius / 2.f,
+                        pos.position.y - 15.f};
+      DrawText("R", label_pos.x, label_pos.y, 16.f, Color{255, 255, 255, 255});
+      DrawCircleV(pos.position, particle_size, circ.color);
     });
 
   EndMode2D();
@@ -65,13 +70,13 @@ inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
 
   ecs.add<engine::components::UIWindowComponent>(
     window, engine::components::UIWindowComponent{
-              {20.f, 20.f}, 250.f, 150.f, "Smoothing Controls"});
-  ecs.get<engine::components::UIWindowComponent>(window).auto_height = false;
+              {20.f, 20.f}, 250.f, 200.f, "Smoothing Controls"});
+  ecs.get<engine::components::UIWindowComponent>(window).auto_height = true;
 
   engine::Entity radius_slider = ecs.create_entity();
   ecs.add<engine::components::UILayoutChildComponent>(
     radius_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 10.f});
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
   ecs.add<engine::components::UIResolvedRectComponent>(radius_slider);
   ecs.add<engine::components::UISliderComponent>(
     radius_slider,
@@ -84,7 +89,7 @@ inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
   engine::Entity strength_slider = ecs.create_entity();
   ecs.add<engine::components::UILayoutChildComponent>(
     strength_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 10.f});
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
   ecs.add<engine::components::UIResolvedRectComponent>(strength_slider);
   ecs.add<engine::components::UISliderComponent>(
     strength_slider,
@@ -94,6 +99,19 @@ inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
   ecs.add<engine::components::UITooltipComponent>(
     strength_slider,
     "Controls the strengh of influence from smoothing radius.");
+
+  engine::Entity size_slider = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    size_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(size_slider);
+  ecs.add<engine::components::UISliderComponent>(
+    size_slider,
+    engine::components::UISliderComponent{
+      "Size", &motrix::engine::systems::particle_size, 1.f, 50.f, 1.f,
+      [](float value) { particle_size = std::max(1.f, value); }});
+  ecs.add<engine::components::UITooltipComponent>(
+    size_slider, "Controls the particle size.");
 
   logger::info("[GUI] Created window '{}' (entity:{}:{})",
                ecs.get<engine::components::UIWindowComponent>(window).title,

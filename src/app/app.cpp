@@ -12,6 +12,8 @@
 #include "raylib.h"
 #include "resource_dir.h"
 
+static bool SHOW_FPS = true;
+
 namespace m_app = motrix::app;
 namespace m_eng = motrix::engine;
 
@@ -142,9 +144,12 @@ static void RenderApp(m_app::AppState& state) {
 
   m_eng::systems::RenderUI(state.ecs, state.currentScene);
 
-  DrawTextEx(defaultFont, TextFormat("FPS: %d", GetFPS()), Vector2{10, 10},
-             defaultFont.baseSize * cam.uiScale * 1.5f, 1,
-             Color{246, 120, 232, 255});
+  if (IsKeyPressed(KEY_F11)) SHOW_FPS = !SHOW_FPS;
+
+  if (SHOW_FPS)
+    DrawTextEx(defaultFont, TextFormat("FPS: %d", GetFPS()), Vector2{10, 10},
+               defaultFont.baseSize * cam.uiScale * 1.5f, 1,
+               Color{246, 120, 232, 255});
 
   EndDrawing();
 }
