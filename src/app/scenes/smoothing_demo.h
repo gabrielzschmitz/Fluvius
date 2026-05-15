@@ -133,7 +133,7 @@ namespace m_ett = motrix::entities;
 
 inline void InitSmoothingDemo(AppState& state) {
   state.cameraEntity = m_ett::CreateCamera(state.ecs);
-  state.canvasEntity = m_ett::CreateCanvas(state.ecs);
+  state.canvasEntity = m_ett::CreateCanvasWithHandles(state.ecs, false);
   m_eng::systems::CreateSmoothingDemo(state.ecs);
   m_ett::CreateSmoothingDemoUI(state.ecs);
 }

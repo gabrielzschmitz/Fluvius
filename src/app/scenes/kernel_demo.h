@@ -17,7 +17,7 @@ struct KernelParticleTag {
 
 namespace motrix::engine::systems {
 
-inline float blur_intensity = 0.5f;
+inline float blur_intensity = 0.85f;
 inline int particles_num = 100;
 
 inline void CreateKernelDemo(ECS& ecs, size_t particle_count = 100) {
@@ -162,7 +162,7 @@ namespace m_ett = motrix::entities;
 
 inline void InitKernelDemo(AppState& state) {
   state.cameraEntity = m_ett::CreateCamera(state.ecs);
-  state.canvasEntity = m_ett::CreateCanvas(state.ecs);
+  state.canvasEntity = m_ett::CreateCanvasWithHandles(state.ecs, false);
   m_eng::systems::CreateKernelDemo(state.ecs, m_eng::systems::particles_num);
   m_ett::CreateKernelDemoUI(state.ecs);
 }

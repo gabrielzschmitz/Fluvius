@@ -178,15 +178,22 @@ inline void RenderCanvas(ECS& ecs, const components::CameraComponent& cam) {
       DrawLineEx(br, bl, border_w, LIGHTGRAY);
       DrawLineEx(bl, tl, border_w, LIGHTGRAY);
 
-      Vector2 handle_positions[4] = {
-        {-canvas.half_extents.x, -canvas.half_extents.y},
-        {canvas.half_extents.x, -canvas.half_extents.y},
-        {canvas.half_extents.x, canvas.half_extents.y},
-        {-canvas.half_extents.x, canvas.half_extents.y}};
+      DrawRectangleRec({tl.x - border_w / 2.f, tl.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
+      DrawRectangleRec({tr.x - border_w / 2.f, tr.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
+      DrawRectangleRec({br.x - border_w / 2.f, br.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
+      DrawRectangleRec({bl.x - border_w / 2.f, bl.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
 
-      for (int i = 0; i < 4; i++) {
-        handle_positions[i] = CanvasLocalToWorld(handle_positions[i], canvas);
-        DrawCircleV(handle_positions[i], canvas.handle_radius, LIGHTGRAY);
+      if (canvas.show_handles) {
+        Vector2 handle_positions[4] = {
+          {-canvas.half_extents.x, -canvas.half_extents.y},
+          {canvas.half_extents.x, -canvas.half_extents.y},
+          {canvas.half_extents.x, canvas.half_extents.y},
+          {-canvas.half_extents.x, canvas.half_extents.y}};
+
+        for (int i = 0; i < 4; i++) {
+          handle_positions[i] = CanvasLocalToWorld(handle_positions[i], canvas);
+          DrawCircleV(handle_positions[i], canvas.handle_radius, LIGHTGRAY);
+        }
       }
     });
 

@@ -31,17 +31,19 @@ struct CanvasComponent {
 
   float handle_radius = 8.f;
   float edge_tolerance = 20.f;
+  bool show_handles = true;
 
   CanvasComponent() = default;
 
-  explicit CanvasComponent(Vector2 pos, Vector2 dim, float rot = 0.f)
+explicit CanvasComponent(Vector2 pos, Vector2 dim, float rot = 0.f)
     : position(pos),
       size(dim),
       rotation(rot),
       half_extents{dim.x / 2.f, dim.y / 2.f},
       prev_position(pos),
       prev_rotation(rot),
-      rotation_dirty(true) {}
+      rotation_dirty(true),
+      show_handles(true) {}
 };
 
 }  // namespace motrix::engine::components
