@@ -23,34 +23,36 @@
 %    Considerando babel = brazil
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
 
-% \addto\captionsbrazil{
-%   \renewcommand{\abstractname}{Abstract}
-%   \renewcommand{\figurename}{Figura}
-%   \renewcommand{\tablename}{Tabela}
-% }
+\addto\captionsbrazil{
+  \renewcommand{\abstractname}{Abstract}
+  \renewcommand{\figurename}{Figura}
+  \renewcommand{\tablename}{Tabela}
+}
 %
 % %considerando babel = english
 % \addto\captionsenglish{
 %   \renewcommand{\tablename}{Table}
 % }
-
-% Define custom colors for syntax highlighting
-\definecolor{keywordcolor}{rgb}{0.0, 0.0, 1.0} % Blue for keywords
-\definecolor{stringcolor}{rgb}{0.0, 0.5, 0.0}  % Green for strings
-\definecolor{commentcolor}{rgb}{0.5, 0.5, 0.5} % Gray for comments
-\definecolor{backgroundcolor}{rgb}{1, 1, 1} % Light background
+\renewcommand{\lstlistingname}{Código}
+\renewcommand{\lstlistlistingname}{Lista de Códigos}
 
 % Configure listings style for C code
-\lstdefinestyle{mystyle}{
-	backgroundcolor=\color{white}, % Set background color
-	basicstyle=\ttfamily\footnotesize,       % Font size and type
-	keywordstyle=\color{keywordcolor}\bfseries, % Keywords in blue and bold
-	stringstyle=\color{stringcolor},          % Strings in green
-	commentstyle=\color{commentcolor}\itshape, % Comments in gray and italic
-	%numbers=left,                            % Line numbers on the left
-	%numberstyle=\tiny\color{gray},           % Style of line numbers
-	%stepnumber=1,                            % Line number step
-	%numbersep=5pt,                           % Space between line numbers and code
-	tabsize=2,                               % Tab size
-	breaklines=true                          % Break long lines
+\lstdefinestyle{prog}{
+	backgroundcolor=\color{white},
+	basicstyle=\ttfamily\footnotesize,
+	keywordstyle=\color{purple}\bfseries,
+	stringstyle=\color{green!50!black},
+	commentstyle=\color{gray}\itshape,
+	emph={
+		size_t,
+		Vector2
+	},
+	emphstyle=\color{purple}\bfseries,
+	emph={[2]
+		Poly6Kernel,
+		GetNeighborParticles
+	},
+	emphstyle={[2]\color{teal}\bfseries},
+	tabsize=2,
+	breaklines=true
 }

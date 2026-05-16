@@ -49,12 +49,12 @@ utilizando uma quantidade reduzida de partículas, o sistema passa a apresentar
 comportamento visual e físico semelhante ao de um fluido contínuo.
 
 \begin{figure}[H]
-	\centering
-	\setlength{\fboxsep}{0pt}
-	\includegraphics[width=0.49\textwidth]{./fig/fig1.png}
+  \centering
+  \setlength{\fboxsep}{0pt}
+  \includegraphics[width=0.49\textwidth]{./fig/fig1.png}
   \caption{Mesma distribuição de partículas discretas antes e após a aplicação do
   kernel de suavização no método SPH.}
-	\label{fig:fig1}
+  \label{fig:fig1}
 \end{figure}
 
 A partir dessa representação particulada, torna-se possível aproximar as
@@ -162,89 +162,362 @@ indicando que a divergência do campo de velocidades é nula. Isso significa que
 a quantidade de fluido que entra em uma região é igual à quantidade que sai,
 mantendo a densidade aproximadamente constante ao longo da simulação.
 
-% A aproximação de uma grandeza escalar \(A\) na posição \(r\) é dada pela
-% Equação \ref{eq:sph_interpolation}:
-%
-% \begin{equation}
-% A_S(r) =
-% \sum_j
-% m_j \frac{A_j}{\rho_j}
-% W(r - r_j, h),
-% \label{eq:sph_interpolation}
-% \end{equation}
-%
-% em que \(m_j\) representa a massa da partícula \(j\), \(A_j\) a grandeza física
-% associada à partícula, \(\rho_j\) sua densidade, \(r_j\) sua posição e \(W(r -
-% r_j, h)\) o kernel de suavização com raio de suporte \(h\).
-%
-% O kernel define como a influência de uma partícula diminui com a distância.
-% Para garantir estabilidade e precisão numérica, a função kernel deve ser
-% normalizada, conforme mostrado na Equação \ref{eq:kernel_normalization}:
-%
-% \begin{equation}
-% \int W(r)\,dr = 1,
-% \label{eq:kernel_normalization}
-% \end{equation}
-%
-% garantindo que a soma das contribuições preserve as propriedades físicas do
-% fluido.
-%
-% Cada partícula representa um pequeno volume do fluido, definido pela razão
-% entre massa e densidade:
-%
-% \begin{equation}
-% V_i = \frac{m_i}{\rho_i},
-% \label{eq:particle_volume}
-% \end{equation}
-%
-% em que a massa permanece constante ao longo da simulação, enquanto a densidade
-% varia dinamicamente conforme a distribuição espacial das partículas vizinhas.
-%
-% A densidade local do fluido pode ser calculada diretamente pelas contribuições
-% das partículas vizinhas, conforme a Equação \ref{eq:sph_density}:
-%
-% \begin{equation}
-% \rho_S(r) =
-% \sum_j
-% m_j
-% W(r - r_j, h),
-% \label{eq:sph_density}
-% \end{equation}
-%
-% permitindo estimar regiões de compressão e expansão do fluido.
-%
-% Além da interpolação de grandezas escalares, o SPH também permite aproximar os
-% operadores diferenciais presentes nas equações de Navier-Stokes. Nesse caso, as
-% derivadas são aplicadas diretamente ao kernel de suavização.
-%
-% O gradiente de uma grandeza escalar \(A\) pode ser aproximado pela Equação
-% \ref{eq:sph_gradient}:
-%
-% \begin{equation}
-% \nabla A_S(r) =
-% \sum_j
-% m_j \frac{A_j}{\rho_j}
-% \nabla W(r - r_j, h),
-% \label{eq:sph_gradient}
-% \end{equation}
-%
-% enquanto o operador Laplaciano é aproximado pela Equação
-% \ref{eq:sph_laplacian}:
-%
-% \begin{equation}
-% \nabla^2 A_S(r) =
-% \sum_j
-% m_j \frac{A_j}{\rho_j}
-% \nabla^2 W(r - r_j, h).
-% \label{eq:sph_laplacian}
-% \end{equation}
-%
-% Essas aproximações permitem discretizar os termos das equações de Navier-Stokes
-% diretamente sobre as partículas, possibilitando simular o comportamento
-% contínuo do fluido por meio de interações locais entre partículas vizinhas.
-%
-% Apesar de sua flexibilidade e simplicidade de implementação, o método SPH
-% apresenta limitações numéricas, como instabilidades, perda de conservação de
-% momento e assimetrias nas forças entre partículas. Por esse motivo,
-% implementações práticas normalmente incorporam técnicas adicionais de
-% estabilização para preservar a consistência física da simulação.
+\subsection{Aplicando à simulação}
+\label{subsec:aplicando-a-simulacao}
+
+No método SPH, as equações diferenciais contínuas apresentadas anteriormente
+(\ref{eq:navier_stokes_momentum} e \ref{eq:navier_stokes_incompressibility})
+são convertidas em interações discretas entre partículas. Em vez de resolver as
+derivadas diretamente em um domínio contínuo, cada partícula do fluido passa a
+armazenar propriedades físicas locais, como posição, velocidade, densidade e
+pressão. A dinâmica do fluido emerge da interação entre partículas vizinhas
+dentro de um raio de influência definido pelo kernel de suavização.
+
+A cada passo de tempo da simulação, as partículas executam uma sequência de
+cálculos numéricos responsáveis por aproximar os termos presentes nas Equações
+de Navier-Stokes. Inicialmente são identificadas as partículas vizinhas dentro
+do raio de suporte \(h\). Em seguida, são calculadas a densidade local, a
+pressão, as forças viscosas e, por fim, a aceleração resultante aplicada à
+partícula.
+
+A aproximação de uma grandeza escalar \(A\) na posição \(r\) é dada pela
+Equação \ref{eq:sph_interpolation}:
+
+\begin{equation}
+A_S(r) =
+\sum_j
+m_j \frac{A_j}{\rho_j}
+W(r - r_j, h),
+\label{eq:sph_interpolation}
+\end{equation}
+
+em que \(m_j\) representa a massa da partícula \(j\), \(A_j\) a grandeza física
+associada à partícula, \(\rho_j\) sua densidade, \(r_j\) sua posição e
+\(W(r-r_j,h)\) o kernel de suavização com raio de suporte \(h\).
+
+Dessa forma, as derivadas presentes na Equação \ref{eq:navier_stokes_momentum}
+passam a ser aproximadas por somatórios locais sobre partículas vizinhas,
+permitindo transformar o problema contínuo em uma formulação computacional
+discreta.
+
+\subsubsection{Smoothing Kernel}
+
+O kernel de suavização define como a influência de uma partícula diminui com a
+distância. Durante a simulação, cada partícula considera apenas vizinhas
+localizadas dentro do raio de suporte \(h\), reduzindo o custo computacional e
+garantindo interações locais.
+
+Para garantir estabilidade e conservação das propriedades físicas do fluido, o
+kernel deve ser normalizado conforme a Equação \ref{eq:kernel_normalization}:
+
+\begin{equation}
+\int W(r)\,dr = 1,
+\label{eq:kernel_normalization}
+\end{equation}
+
+garantindo que a soma das contribuições preserve a massa e as propriedades do
+fluido.
+
+Na prática, o valor do kernel é calculado para cada par de partículas vizinhas,
+produzindo um peso proporcional à distância entre elas. Partículas mais
+próximas exercem maior influência, enquanto partículas distantes possuem
+contribuição reduzida ou nula.
+
+\begin{figure}[H]
+  \centering
+  \setlength{\fboxsep}{0pt}
+  \includegraphics[width=0.49\textwidth]{./fig/fig2.png}
+  \caption{Representação visual da área de influência (smoothing radius) de uma
+  única partícula central, indicando o decaimento radial da influência do
+  kernel até o raio de suporte \(h\).}
+  \label{fig:fig2}
+\end{figure}
+
+\subsubsection{Kernels especializados}
+
+A estabilidade, precisão e desempenho do método SPH dependem diretamente da
+escolha das funções kernel utilizadas durante a simulação. Essas funções são
+responsáveis por definir como as propriedades físicas de uma partícula
+influenciam suas vizinhas dentro do raio de suporte \(h\).
+
+Segundo \cite{muller2003particle}, kernels adequados para SPH devem ser
+normalizados, possuir simetria radial e apresentar valor e derivadas nulas na
+fronteira do raio de suporte. Essas propriedades contribuem para a estabilidade
+numérica da simulação e evitam descontinuidades nas forças entre partículas.
+
+Embora o SPH utilize uma formulação geral baseada em kernels de suavização,
+diferentes operadores físicos exigem propriedades matemáticas específicas.
+Dessa forma, implementações práticas normalmente utilizam kernels distintos
+para densidade, pressão e viscosidade.
+
+\paragraph{Kernel Poly6}
+
+O kernel Poly6 é utilizado principalmente para o cálculo da densidade devido ao
+seu comportamento suave e estável. Sua formulação é dada por:
+
+\begin{equation}
+W_{\rho}(r,h) =
+\frac{315}{64\pi h^9}
+\begin{cases}
+(h^2-r^2)^3 & 0 \le r \le h \\
+0           & \text{caso contrário,}
+\end{cases}
+\label{eq:poly6_kernel}
+\end{equation}
+
+Uma característica importante desse kernel é que a distância aparece apenas na
+forma quadrática (\(r^2\)), permitindo calcular sua influência sem utilizar
+raízes quadradas durante a computação das distâncias entre partículas. Isso
+reduz significativamente o custo computacional da simulação.
+
+Além disso, o Poly6 produz distribuições suaves de densidade, tornando-o
+adequado para a interpolação de grandezas escalares no fluido.
+
+\paragraph{Kernel Spiky}
+
+Embora o kernel Poly6 seja eficiente para densidade, ele apresenta problemas no
+cálculo das forças de pressão. Quando partículas ficam extremamente próximas, o
+gradiente do Poly6 tende a zero no centro, reduzindo a força de repulsão entre
+as partículas e favorecendo a formação de agrupamentos artificiais sob altas
+pressões.
+
+Para evitar esse problema, \cite{muller2003particle} utiliza o kernel Spiky no
+cálculo das forças de pressão:
+
+\begin{equation}
+W_{s}(r,h) =
+\frac{15}{\pi h^6}
+\begin{cases}
+(h-r)^3 & 0 \le r \le h \\
+0       & \text{caso contrário,}
+\end{cases}
+\label{eq:spiky_kernel}
+\end{equation}
+
+O principal diferencial desse kernel é seu gradiente não nulo próximo ao
+centro, produzindo forças repulsivas mais intensas entre partículas muito
+próximas. Isso melhora significativamente a estabilidade do cálculo de pressão
+e evita aglomerações numéricas no fluido.
+
+Além disso, o kernel Spiky possui derivadas suaves e nulas na fronteira do raio
+de suporte, reduzindo descontinuidades nas forças calculadas.
+
+\paragraph{Kernel de viscosidade}
+
+A viscosidade modela o atrito interno do fluido e possui efeito dissipativo,
+reduzindo diferenças de velocidade entre partículas vizinhas. Entretanto,
+kernels tradicionais podem produzir Laplacianos negativos em determinadas
+regiões, gerando forças viscosas instáveis que aumentam artificialmente a
+velocidade relativa entre partículas.
+
+Para evitar esse problema, \cite{muller2003particle} propõe um kernel
+específico para viscosidade:
+
+\begin{equation}
+W_{\nu}(r,h) =
+\frac{15}{2\pi h^3}
+\begin{cases}
+\left(
+-\frac{r^3}{2h^3}
++\frac{r^2}{h^2}
++\frac{h}{2r}
+-1
+\right)
+& 0 \le r \le h \\
+0 & \text{caso contrário,}
+\end{cases}
+\label{eq:viscosity_kernel}
+\end{equation}
+
+Esse kernel foi projetado para possuir Laplaciano positivo em todo o domínio,
+garantindo que as forças viscosas atuem sempre dissipando energia e suavizando
+o campo de velocidades.
+
+Seu Laplaciano é dado por:
+
+\begin{equation}
+\nabla^2 W_{\nu}(r,h) =
+\frac{45}{\pi h^6}(h-r),
+\label{eq:viscosity_laplacian}
+\end{equation}
+
+mantendo comportamento estável mesmo em simulações com baixa quantidade de
+partículas.
+
+A utilização desse kernel melhora significativamente a estabilidade numérica da
+simulação, reduzindo oscilações e diminuindo a necessidade de técnicas
+adicionais de amortecimento.
+
+\subsubsection{Cálculo da densidade}
+
+Após determinar as partículas vizinhas, a densidade local de cada partícula é
+calculada por meio da soma ponderada das massas vizinhas utilizando o kernel de
+suavização. Essa etapa corresponde à discretização da conservação de massa.
+
+Cada partícula representa um pequeno volume do fluido definido por:
+
+\begin{equation}
+V_i = \frac{m_i}{\rho_i},
+\label{eq:particle_volume}
+\end{equation}
+
+em que a massa permanece constante ao longo da simulação, enquanto a densidade
+varia dinamicamente conforme a distribuição espacial das partículas.
+
+A densidade local é então estimada pela Equação \ref{eq:sph_density}:
+
+\begin{equation}
+\rho_S(r) =
+\sum_j
+m_j
+W_{\rho}(r-r_j,h),
+\label{eq:sph_density}
+\end{equation}
+
+Esse cálculo está diretamente relacionado à condição de incompressibilidade da
+Equação \ref{eq:navier_stokes_incompressibility}, pois grandes variações de
+densidade indicam desvios do comportamento incompressível esperado.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.49\textwidth]{./fig/fig3.png}
+  \caption{Representação da estimativa de densidade local a partir das
+  contribuições ponderadas das partículas vizinhas contidas no raio de suporte
+  \(h\).}
+  \label{fig:fig3}
+\end{figure}
+
+A implementação da Equação \ref{eq:sph_density} é apresentada no Código
+\ref{code:sph_density}. Para cada partícula \(i\), o algoritmo percorre suas
+partículas vizinhas localizadas dentro do raio de suporte \(h\), acumulando
+suas contribuições por meio da função kernel \texttt{Poly6Kernel}. A densidade
+local é então obtida pela soma ponderada entre a massa \(m_j\) das partículas
+vizinhas e o valor do kernel em função da distância relativa entre as
+partículas.
+
+\hfill \break
+\hrule
+\begin{lstlisting}[
+    style=prog,
+    language=C++,
+    caption={Cálculo da densidade SPH},
+    label={code:sph_density}
+]
+void ComputeDensity() {
+  float h = entities::smoothing_radius;
+  float h2 = h * h;
+  float m = entities::particle_size;
+  size_t N = particle_entities.size();
+
+  for (size_t i = 0; i < N; ++i) {
+    Vector2 r = particles[i].position;
+
+    float rho = 0.0f;
+
+    for (size_t j : GetNeighborParticles(i)) {
+      Vector2 r_j = particles[j].position;
+
+      float rx = r_j.x - r.x;
+      float ry = r_j.y - r.y;
+
+      float r2 = rx * rx + ry * ry;
+
+      if (r2 <= h2)
+        rho += m * Poly6Kernel(r2, h);
+    }
+
+    particles[i].density = rho;
+  }
+}
+\end{lstlisting}
+\hrule
+
+\subsubsection{Cálculo da pressão}
+
+Com a densidade calculada, a pressão de cada partícula pode ser determinada por
+uma equação de estado. Em implementações SPH fracamente compressíveis, a
+pressão normalmente é obtida em função da diferença entre a densidade local e a
+densidade de repouso do fluido.
+
+Após o cálculo da pressão, o gradiente do kernel é utilizado para aproximar o
+termo de pressão da Equação de Navier-Stokes, responsável por gerar forças de
+repulsão entre partículas em regiões comprimidas.
+
+O gradiente de uma grandeza escalar \(A\) é aproximado pela Equação
+\ref{eq:sph_gradient}:
+
+\begin{equation}
+\nabla A_S(r) =
+\sum_j
+m_j \frac{A_j}{\rho_j}
+\nabla W(r-r_j,h),
+\label{eq:sph_gradient}
+\end{equation}
+
+permitindo discretizar o termo:
+
+\begin{equation}
+-\frac{\nabla p}{\rho},
+\end{equation}
+
+responsável pela aceleração do fluido entre regiões de diferentes pressões.
+
+Na simulação, esse termo produz forças que tendem a afastar partículas muito
+próximas e equilibrar a distribuição do fluido ao longo do domínio.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.49\textwidth]{./fig/pressure_force.png}
+  \caption{Representação da força de pressão entre partículas, produzindo
+  aceleração em direção às regiões de menor pressão.}
+  \label{fig:pressure_force}
+\end{figure}
+
+\subsubsection{Cálculo da viscosidade}
+
+A viscosidade é responsável pela dissipação de energia e pelo amortecimento das
+diferenças de velocidade entre partículas vizinhas. Esse efeito modela o atrito
+interno do fluido e contribui para a estabilidade da simulação.
+
+No SPH, o termo viscoso é obtido utilizando o Laplaciano do kernel de
+suavização. O operador Laplaciano é aproximado pela Equação
+\ref{eq:sph_laplacian}:
+
+\begin{equation}
+\nabla^2 A_S(r) =
+\sum_j
+m_j \frac{A_j}{\rho_j}
+\nabla^2 W(r-r_j,h).
+\label{eq:sph_laplacian}
+\end{equation}
+
+Essa aproximação permite discretizar diretamente o termo viscoso das Equações
+de Navier-Stokes:
+
+\begin{equation}
+\nu \nabla^2 \mathbf{u},
+\end{equation}
+
+em que \(\nu\) representa a viscosidade cinemática do fluido.
+
+Na prática, esse termo suaviza diferenças bruscas de velocidade entre
+partículas próximas, reduzindo oscilações numéricas e produzindo um movimento
+mais contínuo e estável.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.49\textwidth]{./fig/viscosity_effect.png}
+  \caption{Efeito da viscosidade no amortecimento das diferenças de
+  velocidade entre partículas vizinhas.}
+  \label{fig:viscosity_effect}
+\end{figure}
+
+Após o cálculo das forças de pressão, viscosidade e forças externas como a
+gravidade \(\mathbf{g}\), a aceleração total de cada partícula é atualizada.
+Com isso, velocidade e posição podem ser integradas numericamente ao longo do
+tempo, permitindo a evolução dinâmica do fluido.
+
+Dessa forma, as equações contínuas de Navier-Stokes passam a ser representadas
+por interações locais entre partículas vizinhas, permitindo simular o
+comportamento macroscópico do fluido a partir de operações discretas e
+computacionalmente viáveis.
