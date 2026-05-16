@@ -178,10 +178,18 @@ inline void RenderCanvas(ECS& ecs, const components::CameraComponent& cam) {
       DrawLineEx(br, bl, border_w, LIGHTGRAY);
       DrawLineEx(bl, tl, border_w, LIGHTGRAY);
 
-      DrawRectangleRec({tl.x - border_w / 2.f, tl.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
-      DrawRectangleRec({tr.x - border_w / 2.f, tr.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
-      DrawRectangleRec({br.x - border_w / 2.f, br.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
-      DrawRectangleRec({bl.x - border_w / 2.f, bl.y - border_w / 2.f, border_w, border_w}, LIGHTGRAY);
+      DrawRectangleRec(
+        {tl.x - border_w / 2.f, tl.y - border_w / 2.f, border_w, border_w},
+        LIGHTGRAY);
+      DrawRectangleRec(
+        {tr.x - border_w / 2.f, tr.y - border_w / 2.f, border_w, border_w},
+        LIGHTGRAY);
+      DrawRectangleRec(
+        {br.x - border_w / 2.f, br.y - border_w / 2.f, border_w, border_w},
+        LIGHTGRAY);
+      DrawRectangleRec(
+        {bl.x - border_w / 2.f, bl.y - border_w / 2.f, border_w, border_w},
+        LIGHTGRAY);
 
       if (canvas.show_handles) {
         Vector2 handle_positions[4] = {

@@ -48,8 +48,8 @@ inline void RenderSmoothing(ECS& ecs, const components::CameraComponent& cam) {
       Vector2 edge_pos{pos.position.x + smoothing_radius, pos.position.y};
       DrawLineEx(pos.position, edge_pos, line_width, Color{255, 255, 255, 255});
       Vector2 label_pos{pos.position.x + smoothing_radius / 2.f,
-                        pos.position.y - 15.f};
-      DrawText("R", label_pos.x, label_pos.y, 16.f, Color{255, 255, 255, 255});
+                        pos.position.y - 23.f};
+      DrawText("h", label_pos.x, label_pos.y, 24.f, Color{255, 255, 255, 255});
       DrawCircleV(pos.position, particle_size, circ.color);
     });
 

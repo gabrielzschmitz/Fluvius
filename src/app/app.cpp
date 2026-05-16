@@ -144,7 +144,7 @@ static void RenderApp(m_app::AppState& state) {
 
   m_eng::systems::RenderUI(state.ecs, state.currentScene);
 
-  if (IsKeyPressed(KEY_F11)) SHOW_FPS = !SHOW_FPS;
+  if (IsKeyPressed(KEY_F11) || IsKeyPressed('f')) SHOW_FPS = !SHOW_FPS;
 
   if (SHOW_FPS)
     DrawTextEx(defaultFont, TextFormat("FPS: %d", GetFPS()), Vector2{10, 10},
