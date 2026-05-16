@@ -2,6 +2,7 @@
 #pragma once
 
 #include "app/scene.h"
+#include "app/scenes/density_demo.h"
 #include "app/scenes/fluid_sim.h"
 #include "app/scenes/kernel_demo.h"
 #include "app/scenes/smoothing_demo.h"
@@ -16,8 +17,11 @@ constexpr Scene FLUID_SIM{"fluid", InitFluidSim, UpdateFluidSim, RenderFluidSim,
                           m_ett::CreateUI};
 constexpr Scene KERNEL_DEMO{"kernel", InitKernelDemo, UpdateKernelDemo,
                             RenderKernelDemo, m_ett::CreateKernelDemoUI};
-constexpr Scene SMOOTHING_DEMO{"smoothing", InitSmoothingDemo, UpdateSmoothingDemo,
-                               RenderSmoothingDemo, m_ett::CreateSmoothingDemoUI};
+constexpr Scene SMOOTHING_DEMO{"smoothing", InitSmoothingDemo,
+                               UpdateSmoothingDemo, RenderSmoothingDemo,
+                               m_ett::CreateSmoothingDemoUI};
+constexpr Scene DENSITY_DEMO{"density", InitDensityDemo, UpdateDensityDemo,
+                             RenderDensityDemo, m_ett::CreateDensityDemoUI};
 
 inline const Scene& Get(SceneType type) {
   switch (type) {
@@ -27,6 +31,8 @@ inline const Scene& Get(SceneType type) {
       return KERNEL_DEMO;
     case SceneType::SMOOTHING_DEMO:
       return SMOOTHING_DEMO;
+    case SceneType::DENSITY_DEMO:
+      return DENSITY_DEMO;
   }
   return FLUID_SIM;
 }
@@ -40,6 +46,7 @@ constexpr NameEntry SCENE_NAMES[] = {
   {"fluid", SceneType::FLUID_SIM},
   {"kernel", SceneType::KERNEL_DEMO},
   {"smoothing", SceneType::SMOOTHING_DEMO},
+  {"density", SceneType::DENSITY_DEMO},
 };
 
 inline SceneType FindByName(const char* name) {
