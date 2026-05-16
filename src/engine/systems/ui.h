@@ -619,7 +619,7 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed,
                          motrix::app::SceneType sceneType) {
   Vector2 mouse = GetMousePosition();
 
-  if (IsKeyPressed(KEY_F10) || IsKeyPressed('u')) {
+  if (IsKeyPressed(KEY_F10) || IsKeyPressed(KEY_U)) {
     bool has_window = false;
     ecs.group_view<UIWindowComponent>([&](Entity, UIWindowComponent& window) {
       has_window = true;
