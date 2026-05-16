@@ -6,6 +6,7 @@
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
 #include "engine/systems/canvas.h"
+#include "engine/systems/physics.h"
 
 namespace motrix::engine::components {
 
@@ -18,9 +19,9 @@ struct DensityParticleTag {
 namespace motrix::engine::systems {
 
 inline int grid_columns = 25;
-inline int grid_rows = 14;
+inline int grid_rows = 15;
 inline float grid_columns_float = 25.f;
-inline float grid_rows_float = 14.f;
+inline float grid_rows_float = 15.f;
 inline float grid_smoothing_radius = 125.f;
 inline float grid_line_width = 2.f;
 inline int pending_columns = -1;
@@ -69,14 +70,35 @@ inline void RenderDensityDemo(ECS& ecs,
     [&](Entity, components::DensityParticleTag&,
         components::PositionComponent& pos, components::CircleComponent& circ) {
       float dist = Vector2Distance(pos.position, center);
+      Color particleColor;
+
       if (dist <= grid_smoothing_radius) {
         float t = 1.0f - (dist / grid_smoothing_radius);
         unsigned char c = static_cast<unsigned char>(150 + 105 * t);
-        circ.color = Color{c, c, c, 255};
-      } else {
-        circ.color = GRAY;
+        particleColor = Color{c, c, c, 255};
+
+        Vector2 toCenter = Vector2Subtract(center, pos.position);
+        float arrowRadius = circ.radius * 1.5f;
+        systems::RenderArrow(pos.position, toCenter, arrowRadius, particleColor,
+                             0.3f);
       }
-      DrawCircleV(pos.position, circ.radius, circ.color);
+    });
+  ecs.group_view<components::DensityParticleTag, components::PositionComponent,
+                 components::CircleComponent>(
+    [&](Entity, components::DensityParticleTag&,
+        components::PositionComponent& pos, components::CircleComponent& circ) {
+      float dist = Vector2Distance(pos.position, center);
+      Color particleColor;
+
+      if (dist <= grid_smoothing_radius) {
+        float t = 1.0f - (dist / grid_smoothing_radius);
+        unsigned char c = static_cast<unsigned char>(150 + 105 * t);
+        particleColor = Color{c, c, c, 255};
+      } else
+        particleColor = GRAY;
+
+      float radius = (dist < 1.0f) ? circ.radius * 1.5f : circ.radius;
+      DrawCircleV(pos.position, radius, particleColor);
     });
 
   EndMode2D();
