@@ -18,14 +18,30 @@ struct DensityParticleTag {
 
 namespace motrix::engine::systems {
 
-inline int grid_columns = 25;
-inline int grid_rows = 15;
-inline float grid_columns_float = 25.f;
-inline float grid_rows_float = 15.f;
-inline float grid_smoothing_radius = 125.f;
+inline int grid_columns = 13;
+inline int grid_rows = 7;
+inline float grid_columns_float = 13.f;
+inline float grid_rows_float = 7.f;
+inline float grid_smoothing_radius = 150.f;
 inline float grid_line_width = 2.f;
+inline float grid_particle_mass = 300.0f;
+inline float grid_font_size = 13.0f;
+inline float grid_particle_size = 11.0f;
+inline float grid_arrow_radius = 6.0f;
 inline int pending_columns = -1;
 inline int pending_rows = -1;
+
+inline float DensityPoly6Kernel(float r2, float h) {
+  float h2 = h * h;
+
+  if (r2 > h2) return 0.0f;
+
+  float diff = h2 - r2;
+
+  float coeff = 315.0f / (64.0f * PI * pow(h, 9));
+
+  return coeff * pow(diff, 3);
+}
 
 inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
   ecs.group_view<components::DensityParticleTag>(
@@ -43,7 +59,7 @@ inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
 
       Entity e = ecs.create_entity();
       ecs.add<components::PositionComponent>(e, Vector2{x, y});
-      ecs.add<components::CircleComponent>(e, 4.f, 1.f, GRAY);
+      ecs.add<components::CircleComponent>(e, grid_particle_size, 1.f, GRAY);
       ecs.add<components::DensityParticleTag>(e);
     }
   }
@@ -57,48 +73,109 @@ inline void RenderDensityDemo(ECS& ecs,
   BeginMode2D(cam.camera);
 
   Vector2 center{CANVAS_W / 2.f, CANVAS_H / 2.f};
-  if (grid_smoothing_radius > 0) {
-    DrawCircleV(center, grid_smoothing_radius + grid_line_width,
-                Color{255, 255, 255, 255});
-    DrawCircleV(center, grid_smoothing_radius, canvas_background_color());
-    DrawCircleGradient(center, grid_smoothing_radius, Color{255, 255, 255, 25},
+  float h = grid_smoothing_radius;
+  float h2 = h * h;
+  float m = grid_particle_mass;
+
+  if (h > 0) {
+    DrawCircleV(center, h + grid_line_width, Color{255, 255, 255, 255});
+    DrawCircleV(center, h, canvas_background_color());
+    DrawCircleGradient(center, h, Color{255, 255, 255, 25},
                        Color{255, 255, 255, 1});
+  }
+
+  std::vector<std::pair<Vector2, float>> contributions;
+
+  ecs.group_view<components::DensityParticleTag, components::PositionComponent,
+                 components::CircleComponent>(
+    [&](Entity, components::DensityParticleTag&,
+        components::PositionComponent& pos, components::CircleComponent& circ) {
+      float dx = pos.position.x - center.x;
+      float dy = pos.position.y - center.y;
+      float r2 = dx * dx + dy * dy;
+      float dist = sqrtf(r2);
+
+      if (dist > 1.0f && r2 <= h2) {
+        float kernelVal = DensityPoly6Kernel(r2, h);
+        float contribution = m * kernelVal;
+        contributions.push_back({pos.position, contribution});
+      }
+    });
+
+  float totalDensity = 0.0f;
+  for (auto& c : contributions) {
+    totalDensity += c.second;
+  }
+  float totalDensityScaled = totalDensity * 10000.0f;
+
+  float maxContribution = 0.0f;
+  for (auto& c : contributions) {
+    if (c.second > maxContribution) maxContribution = c.second;
+  }
+
+  for (auto& contrib : contributions) {
+    float intensity =
+      (maxContribution > 0.0f) ? (contrib.second / maxContribution) : 0.0f;
+    unsigned char brightness =
+      static_cast<unsigned char>(150 + 105 * intensity);
+    Color arrowColor = Color{brightness, brightness, brightness, 255};
+
+    Vector2 toCenter = Vector2Subtract(center, contrib.first);
+    float dist = 1.0f - Vector2Distance(contrib.first, center);
+    systems::RenderArrow(contrib.first, toCenter, grid_arrow_radius, arrowColor,
+                         0.3f);
   }
 
   ecs.group_view<components::DensityParticleTag, components::PositionComponent,
                  components::CircleComponent>(
     [&](Entity, components::DensityParticleTag&,
         components::PositionComponent& pos, components::CircleComponent& circ) {
-      float dist = Vector2Distance(pos.position, center);
+      float dx = pos.position.x - center.x;
+      float dy = pos.position.y - center.y;
+      float r2 = dx * dx + dy * dy;
+      float dist = sqrtf(r2);
       Color particleColor;
 
-      if (dist <= grid_smoothing_radius) {
-        float t = 1.0f - (dist / grid_smoothing_radius);
-        unsigned char c = static_cast<unsigned char>(150 + 105 * t);
+      if (r2 <= h2 && dist > 1.0f) {
+        float kernelVal = DensityPoly6Kernel(r2, h);
+        float contribution = m * kernelVal;
+        float intensity =
+          (maxContribution > 0.0f) ? (contribution / maxContribution) : 0.0f;
+        unsigned char c = static_cast<unsigned char>(150 + 105 * intensity);
         particleColor = Color{c, c, c, 255};
-
-        Vector2 toCenter = Vector2Subtract(center, pos.position);
-        float arrowRadius = circ.radius * 1.5f;
-        systems::RenderArrow(pos.position, toCenter, arrowRadius, particleColor,
-                             0.3f);
-      }
-    });
-  ecs.group_view<components::DensityParticleTag, components::PositionComponent,
-                 components::CircleComponent>(
-    [&](Entity, components::DensityParticleTag&,
-        components::PositionComponent& pos, components::CircleComponent& circ) {
-      float dist = Vector2Distance(pos.position, center);
-      Color particleColor;
-
-      if (dist <= grid_smoothing_radius) {
-        float t = 1.0f - (dist / grid_smoothing_radius);
-        unsigned char c = static_cast<unsigned char>(150 + 105 * t);
-        particleColor = Color{c, c, c, 255};
-      } else
+      } else if (dist <= 1.0f) {
+        particleColor = WHITE;
+      } else {
         particleColor = GRAY;
+      }
 
-      float radius = (dist < 1.0f) ? circ.radius * 1.5f : circ.radius;
+      float baseRadius = grid_particle_size;
+      float radius = (dist < 1.0f) ? baseRadius * 1.5f : baseRadius;
       DrawCircleV(pos.position, radius, particleColor);
+
+      if (r2 <= h2 && dist > 1.0f) {
+        float kernelVal = DensityPoly6Kernel(r2, h);
+        float contribution = m * kernelVal;
+        float fraction =
+          (totalDensity > 0.0f) ? (contribution / totalDensity) * 100.0f : 0.0f;
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "%.0f%%", fraction);
+        Vector2 textSize =
+          MeasureTextEx(defaultFont, buffer, grid_font_size, 0.0f);
+        DrawTextEx(defaultFont, buffer,
+                   Vector2{pos.position.x - textSize.x / 2.0f,
+                           pos.position.y - (textSize.y / 2.0f) + 1.0f},
+                   grid_font_size, 0.0f, particleColor);
+      } else if (dist <= 1.0f) {
+        char buffer[32];
+        snprintf(buffer, sizeof(buffer), "%.0f", totalDensityScaled);
+        Vector2 textSize =
+          MeasureTextEx(defaultFont, buffer, grid_font_size * 1.5f, 0.0f);
+        DrawTextEx(defaultFont, buffer,
+                   Vector2{pos.position.x - textSize.x / 2.0f,
+                           pos.position.y - (textSize.y / 2.0f) + 1.0f},
+                   grid_font_size * 1.5f, 0.0f, RED);
+      }
     });
 
   EndMode2D();
@@ -118,7 +195,7 @@ inline void CreateDensityDemoUI(engine::ECS& ecs) {
 
   ecs.add<engine::components::UIWindowComponent>(
     window, engine::components::UIWindowComponent{
-              {20.f, 20.f}, 250.f, 130.f, "Density Controls"});
+              {20.f, 20.f}, 250.f, 250.f, "Density Controls"});
   ecs.get<engine::components::UIWindowComponent>(window).auto_height = true;
 
   engine::Entity count_slider = ecs.create_entity();
@@ -163,11 +240,58 @@ inline void CreateDensityDemoUI(engine::ECS& ecs) {
   ecs.add<engine::components::UISliderComponent>(
     radius_slider, engine::components::UISliderComponent{
                      "Radius", &motrix::engine::systems::grid_smoothing_radius,
-                     0.f, 320.f, 1.f, [](float value) {
-                       motrix::engine::systems::grid_smoothing_radius = value;
-                     }});
+                     0.f, 320.f, 1.f, nullptr});
   ecs.add<engine::components::UITooltipComponent>(
     radius_slider, "Smoothing radius around center particle.");
+
+  engine::Entity font_slider = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    font_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(font_slider);
+  ecs.add<engine::components::UISliderComponent>(
+    font_slider, engine::components::UISliderComponent{
+                   "Font Size", &motrix::engine::systems::grid_font_size, 6.f,
+                   20.f, 1.f, nullptr});
+  ecs.add<engine::components::UITooltipComponent>(font_slider,
+                                                  "Text font size.");
+
+  engine::Entity mass_slider = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    mass_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(mass_slider);
+  ecs.add<engine::components::UISliderComponent>(
+    mass_slider, engine::components::UISliderComponent{
+                   "Mass", &motrix::engine::systems::grid_particle_mass, 100.f,
+                   10000.f, 100.f, nullptr});
+  ecs.add<engine::components::UITooltipComponent>(
+    mass_slider, "Particle mass for density calculation.");
+
+  engine::Entity size_slider = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    size_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(size_slider);
+  ecs.add<engine::components::UISliderComponent>(
+    size_slider,
+    engine::components::UISliderComponent{
+      "Particle Size", &motrix::engine::systems::grid_particle_size, 2.f, 15.f,
+      0.5f, nullptr});
+  ecs.add<engine::components::UITooltipComponent>(size_slider,
+                                                  "Particle circle radius.");
+
+  engine::Entity arrow_slider = ecs.create_entity();
+  ecs.add<engine::components::UILayoutChildComponent>(
+    arrow_slider,
+    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
+  ecs.add<engine::components::UIResolvedRectComponent>(arrow_slider);
+  ecs.add<engine::components::UISliderComponent>(
+    arrow_slider, engine::components::UISliderComponent{
+                    "Arrow Radius", &motrix::engine::systems::grid_arrow_radius,
+                    0.f, 20.f, 0.5f, nullptr});
+  ecs.add<engine::components::UITooltipComponent>(
+    arrow_slider, "Arrow start radius from particle center.");
 }
 
 }  // namespace motrix::entities
