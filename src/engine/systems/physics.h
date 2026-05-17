@@ -216,7 +216,8 @@ inline float cached_gravity_accel = 0.f;
 inline bool kernel_cache_valid = false;
 
 inline void UpdateKernelCache() {
-  if (kernel_cache_valid && cached_h == entities::smoothing_radius) return;
+  if (kernel_cache_valid && cached_h == entities::smoothing_radius
+      && cached_gravity_accel == entities::gravity * 10.f) return;
   cached_h = entities::smoothing_radius;
   cached_h2 = cached_h * cached_h;
   cached_gravity_accel = entities::gravity * 10.f;
