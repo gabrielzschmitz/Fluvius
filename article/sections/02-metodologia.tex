@@ -51,7 +51,7 @@ comportamento visual e físico semelhante ao de um fluido contínuo.
 \begin{figure}[H]
   \centering
   \setlength{\fboxsep}{0pt}
-  \includegraphics[width=0.49\textwidth]{./fig/fig1.png}
+  \includegraphics[width=0.495\textwidth]{./fig/fig1.png}
   \caption{Mesma distribuição de partículas discretas antes e após a aplicação do
   kernel de suavização no método SPH.}
   \label{fig:fig1}
@@ -226,7 +226,7 @@ contribuição reduzida ou nula.
 \begin{figure}[H]
   \centering
   \setlength{\fboxsep}{0pt}
-  \includegraphics[width=0.49\textwidth]{./fig/fig2.png}
+  \includegraphics[width=0.495\textwidth]{./fig/fig2.png}
   \caption{Representação visual da área de influência (smoothing radius) de uma
   única partícula central, indicando o decaimento radial da influência do
   kernel até o raio de suporte \(h\).}
@@ -348,6 +348,19 @@ A utilização desse kernel melhora significativamente a estabilidade numérica 
 simulação, reduzindo oscilações e diminuindo a necessidade de técnicas
 adicionais de amortecimento.
 
+A Figura~\ref{fig:fig3} compara os três kernels utilizados, juntamente com seus
+gradientes e Laplacianos.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.495\textwidth]{./fig/fig3.png}
+  \caption{Os kernels \(W_{\rho}\), \(W_{s}\) e \(W_{\nu}\) (da esquerda para a
+  direita), com \(h = 1\) em todos os gráficos. As linhas espessas representam
+  os kernels, as finas seus gradientes e as tracejadas o Laplaciano, escalado
+  em 0,1\(\times\).}
+  \label{fig:fig3}
+\end{figure}
+
 \subsubsection{Cálculo da densidade}
 
 Após determinar as partículas vizinhas, a densidade local de cada partícula é
@@ -380,11 +393,11 @@ densidade indicam desvios do comportamento incompressível esperado.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.49\textwidth]{./fig/fig3.png}
-  \caption{Representação da estimativa de densidade local a partir das
+  \includegraphics[width=0.495\textwidth]{./fig/fig4.png}
+  \caption{Representação da visual de densidade local a partir das
   contribuições ponderadas das partículas vizinhas contidas no raio de suporte
   \(h\).}
-  \label{fig:fig3}
+  \label{fig:fig4}
 \end{figure}
 
 A implementação da Equação \ref{eq:sph_density} é apresentada no Código
@@ -432,92 +445,92 @@ void ComputeDensity() {
 \end{lstlisting}
 \hrule
 
-\subsubsection{Cálculo da pressão}
-
-Com a densidade calculada, a pressão de cada partícula pode ser determinada por
-uma equação de estado. Em implementações SPH fracamente compressíveis, a
-pressão normalmente é obtida em função da diferença entre a densidade local e a
-densidade de repouso do fluido.
-
-Após o cálculo da pressão, o gradiente do kernel é utilizado para aproximar o
-termo de pressão da Equação de Navier-Stokes, responsável por gerar forças de
-repulsão entre partículas em regiões comprimidas.
-
-O gradiente de uma grandeza escalar \(A\) é aproximado pela Equação
-\ref{eq:sph_gradient}:
-
-\begin{equation}
-\nabla A_S(r) =
-\sum_j
-m_j \frac{A_j}{\rho_j}
-\nabla W(r-r_j,h),
-\label{eq:sph_gradient}
-\end{equation}
-
-permitindo discretizar o termo:
-
-\begin{equation}
--\frac{\nabla p}{\rho},
-\end{equation}
-
-responsável pela aceleração do fluido entre regiões de diferentes pressões.
-
-Na simulação, esse termo produz forças que tendem a afastar partículas muito
-próximas e equilibrar a distribuição do fluido ao longo do domínio.
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.49\textwidth]{./fig/pressure_force.png}
-  \caption{Representação da força de pressão entre partículas, produzindo
-  aceleração em direção às regiões de menor pressão.}
-  \label{fig:pressure_force}
-\end{figure}
-
-\subsubsection{Cálculo da viscosidade}
-
-A viscosidade é responsável pela dissipação de energia e pelo amortecimento das
-diferenças de velocidade entre partículas vizinhas. Esse efeito modela o atrito
-interno do fluido e contribui para a estabilidade da simulação.
-
-No SPH, o termo viscoso é obtido utilizando o Laplaciano do kernel de
-suavização. O operador Laplaciano é aproximado pela Equação
-\ref{eq:sph_laplacian}:
-
-\begin{equation}
-\nabla^2 A_S(r) =
-\sum_j
-m_j \frac{A_j}{\rho_j}
-\nabla^2 W(r-r_j,h).
-\label{eq:sph_laplacian}
-\end{equation}
-
-Essa aproximação permite discretizar diretamente o termo viscoso das Equações
-de Navier-Stokes:
-
-\begin{equation}
-\nu \nabla^2 \mathbf{u},
-\end{equation}
-
-em que \(\nu\) representa a viscosidade cinemática do fluido.
-
-Na prática, esse termo suaviza diferenças bruscas de velocidade entre
-partículas próximas, reduzindo oscilações numéricas e produzindo um movimento
-mais contínuo e estável.
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.49\textwidth]{./fig/viscosity_effect.png}
-  \caption{Efeito da viscosidade no amortecimento das diferenças de
-  velocidade entre partículas vizinhas.}
-  \label{fig:viscosity_effect}
-\end{figure}
-
-Após o cálculo das forças de pressão, viscosidade e forças externas como a
-gravidade \(\mathbf{g}\), a aceleração total de cada partícula é atualizada.
-Com isso, velocidade e posição podem ser integradas numericamente ao longo do
-tempo, permitindo a evolução dinâmica do fluido.
-
-Dessa forma, as equações contínuas de Navier-Stokes passam a ser representadas
-por interações locais entre partículas vizinhas, permitindo simular o
-comportamento macroscópico do fluido a partir de operações discretas e
-computacionalmente viáveis.
+% \subsubsection{Cálculo da pressão}
+%
+% Com a densidade calculada, a pressão de cada partícula pode ser determinada por
+% uma equação de estado. Em implementações SPH fracamente compressíveis, a
+% pressão normalmente é obtida em função da diferença entre a densidade local e a
+% densidade de repouso do fluido.
+%
+% Após o cálculo da pressão, o gradiente do kernel é utilizado para aproximar o
+% termo de pressão da Equação de Navier-Stokes, responsável por gerar forças de
+% repulsão entre partículas em regiões comprimidas.
+%
+% O gradiente de uma grandeza escalar \(A\) é aproximado pela Equação
+% \ref{eq:sph_gradient}:
+%
+% \begin{equation}
+% \nabla A_S(r) =
+% \sum_j
+% m_j \frac{A_j}{\rho_j}
+% \nabla W(r-r_j,h),
+% \label{eq:sph_gradient}
+% \end{equation}
+%
+% permitindo discretizar o termo:
+%
+% \begin{equation}
+% -\frac{\nabla p}{\rho},
+% \end{equation}
+%
+% responsável pela aceleração do fluido entre regiões de diferentes pressões.
+%
+% Na simulação, esse termo produz forças que tendem a afastar partículas muito
+% próximas e equilibrar a distribuição do fluido ao longo do domínio.
+%
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.495\textwidth]{./fig/pressure_force.png}
+%   \caption{Representação da força de pressão entre partículas, produzindo
+%   aceleração em direção às regiões de menor pressão.}
+%   \label{fig:pressure_force}
+% \end{figure}
+%
+% \subsubsection{Cálculo da viscosidade}
+%
+% A viscosidade é responsável pela dissipação de energia e pelo amortecimento das
+% diferenças de velocidade entre partículas vizinhas. Esse efeito modela o atrito
+% interno do fluido e contribui para a estabilidade da simulação.
+%
+% No SPH, o termo viscoso é obtido utilizando o Laplaciano do kernel de
+% suavização. O operador Laplaciano é aproximado pela Equação
+% \ref{eq:sph_laplacian}:
+%
+% \begin{equation}
+% \nabla^2 A_S(r) =
+% \sum_j
+% m_j \frac{A_j}{\rho_j}
+% \nabla^2 W(r-r_j,h).
+% \label{eq:sph_laplacian}
+% \end{equation}
+%
+% Essa aproximação permite discretizar diretamente o termo viscoso das Equações
+% de Navier-Stokes:
+%
+% \begin{equation}
+% \nu \nabla^2 \mathbf{u},
+% \end{equation}
+%
+% em que \(\nu\) representa a viscosidade cinemática do fluido.
+%
+% Na prática, esse termo suaviza diferenças bruscas de velocidade entre
+% partículas próximas, reduzindo oscilações numéricas e produzindo um movimento
+% mais contínuo e estável.
+%
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.49\textwidth]{./fig/viscosity_effect.png}
+%   \caption{Efeito da viscosidade no amortecimento das diferenças de
+%   velocidade entre partículas vizinhas.}
+%   \label{fig:viscosity_effect}
+% \end{figure}
+%
+% Após o cálculo das forças de pressão, viscosidade e forças externas como a
+% gravidade \(\mathbf{g}\), a aceleração total de cada partícula é atualizada.
+% Com isso, velocidade e posição podem ser integradas numericamente ao longo do
+% tempo, permitindo a evolução dinâmica do fluido.
+%
+% Dessa forma, as equações contínuas de Navier-Stokes passam a ser representadas
+% por interações locais entre partículas vizinhas, permitindo simular o
+% comportamento macroscópico do fluido a partir de operações discretas e
+% computacionalmente viáveis.
