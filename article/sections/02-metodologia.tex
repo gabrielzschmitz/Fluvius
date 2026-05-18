@@ -467,8 +467,8 @@ densidade indicam desvios do comportamento incompressível esperado.
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.495\textwidth]{./fig/density_visual.png}
-  \caption{Representação da visual de densidade local a partir das
-  contribuições ponderadas das partículas vizinhas contidas no raio de suporte
+  \caption{Representação da visual de densidade local, \(\rho_S = 11\), a
+  partir das contribuições ponderadas das partículas vizinhas contidas no raio
   \(h\).}
   \label{fig:density_visual}
 \end{figure}
@@ -571,9 +571,69 @@ pressão.
   \centering
   \includegraphics[width=0.495\textwidth]{./fig/pressure_force.png}
   \caption{Representação das forças de pressão entre partículas vizinhas,
-  produzindo aceleração em direção às regiões de menor pressão.}
+  produzindo aceleração em direção às regiões de menor pressão. Na simulação,
+  as áreas brancas representam a pressão alvo do fluido, enquanto regiões em
+  vermelho indicam alta pressão e regiões em azul representam baixa pressão.}
   \label{fig:pressure_force}
 \end{figure}
+
+A implementação do cálculo das forças de pressão é apresentada no Código
+\ref{code:sph_pressure}. Para cada partícula \(i\), o algoritmo percorre suas
+partículas vizinhas localizadas dentro do raio de suporte \(h\), acumulando
+suas contribuições por meio do gradiente da função kernel
+\texttt{SpikyKernelGradient}. A força de pressão é então obtida a partir da
+pressão \(p_i\) e da densidade \(\rho_j\) das partículas vizinhas, produzindo
+forças repulsivas proporcionais à compressão local do fluido e orientadas na
+direção entre as partículas.
+
+\hfill
+\hrule
+\begin{lstlisting}[
+    style=prog,
+    language=C++,
+    caption={Cálculo das forças de pressão SPH},
+    label={code:sph_pressure}
+]
+void ComputePressureForce() {
+  float h = entities::smoothing_radius;
+  float m = entities::particle_size;
+  size_t N = particle_entities.size();
+
+  for (size_t i = 0; i < N; ++i) {
+    Vector2 r = particles[i].position;
+    float rho_i = particles[i].density;
+    float p_i = particles[i].pressure;
+
+    Vector2 pressure_force = {0.0f, 0.0f};
+    for (size_t j : GetNeighborParticles(i)) {
+      if (i == j) continue;
+
+      Vector2 r_j = particles[j].position;
+      float rho_j = particles[j].density;
+      float p_j = particles[j].pressure;
+
+      float rx = r_j.x - r.x;
+      float ry = r_j.y - r.y;
+
+      float dist = sqrt(rx * rx + ry * ry);
+
+      if (dist > 0.0f && dist <= h) {
+        Vector2 grad =
+          SpikyKernelGradient(rx, ry, dist, h);
+
+        float pressure =
+          -m * (p_i + p_j) / (2.0f * rho_j);
+
+        pressure_force.x += pressure * grad.x;
+        pressure_force.y += pressure * grad.y;
+      }
+    }
+
+    particles[i].pressure_force = pressure_force;
+  }
+}
+\end{lstlisting}
+\hrule
 
 % \subsubsection{Cálculo da viscosidade}
 %
