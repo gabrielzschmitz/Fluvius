@@ -123,7 +123,7 @@ inline void RenderDensityDemo(ECS& ecs,
     Vector2 toCenter = Vector2Subtract(center, contrib.first);
     float dist = 1.0f - Vector2Distance(contrib.first, center);
     systems::RenderArrow(contrib.first, toCenter, grid_arrow_radius, arrowColor,
-                         0.3f);
+                         0.4f * intensity);
   }
 
   ecs.group_view<components::DensityParticleTag, components::PositionComponent,
