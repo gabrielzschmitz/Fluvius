@@ -28,12 +28,37 @@ inline void InitFluidSim(AppState& state) {
 inline void UpdateFluidSim(AppState& state, float dt) {
   if (m_ett::needs_reset) {
     m_ett::ResetFluid(state.ecs);
+    state.ecs.group_view<m_eng::components::CanvasComponent>(
+      [&](m_eng::Entity, m_eng::components::CanvasComponent& canvas) {
+        canvas.position = {CANVAS_W / 2.f, CANVAS_H / 2.f};
+        canvas.size = {CANVAS_W, CANVAS_H};
+        canvas.rotation = 0.f;
+        canvas.half_extents = {CANVAS_W / 2.f, CANVAS_H / 2.f};
+        canvas.rotation_dirty = true;
+      });
     m_ett::needs_reset = false;
   }
 
   auto& cam =
     state.ecs.get<m_eng::components::CameraComponent>(state.cameraEntity);
   m_eng::systems::UpdateCanvasInteraction(state.ecs, cam);
+
+  static bool key_p_was_down = false;
+  if (IsKeyDown(KEY_P) && !key_p_was_down) {
+    entities::is_paused = !entities::is_paused;
+  }
+  key_p_was_down = IsKeyDown(KEY_P);
+
+  if (entities::is_paused) {
+    if (IsKeyDown(KEY_LEFT)) {
+      m_eng::systems::SimulateFluid(state.ecs, dt * 4.0f, true);
+    }
+    if (IsKeyDown(KEY_RIGHT)) {
+      m_eng::systems::SimulateFluid(state.ecs, dt * 4.0f, true);
+    }
+    m_eng::systems::UpdateCamera2D(state.ecs);
+    return;
+  }
 
   m_eng::systems::SimulateFluid(state.ecs, dt);
 

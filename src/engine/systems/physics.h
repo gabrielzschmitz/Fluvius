@@ -770,9 +770,9 @@ inline void UpdatePathInput(ECS& ecs,
     return;
   }
 
-  // Toggle drawing mode with 'P' key
+  // Toggle drawing mode with 'B' key
   static bool draw_key_was_down = false;
-  bool draw_key_down = IsKeyDown(KEY_P);
+  bool draw_key_down = IsKeyDown(KEY_B);
   if (draw_key_down && !draw_key_was_down) {
     entities::is_drawing_path = !entities::is_drawing_path;
     if (entities::is_drawing_path) {
@@ -1665,13 +1665,13 @@ inline void ComputeParticleDensity(ECS& ecs) {
  * Simulation
  * ============================================================================
  */
-inline void SimulateFluid(ECS& ecs, float dt) {
+inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
   if (entities::particle_cache_dirty || !particle_entities_cached) {
     CacheParticleEntities(ecs);
     entities::particle_cache_dirty = false;
   }
 
-  if (entities::is_paused) return;
+  if (entities::is_paused && !force_simulate) return;
 
   UpdateKernelCache();
 
