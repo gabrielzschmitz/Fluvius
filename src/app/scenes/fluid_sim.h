@@ -51,7 +51,7 @@ inline void UpdateFluidSim(AppState& state, float dt) {
 
   if (entities::is_paused) {
     if (IsKeyDown(KEY_LEFT)) {
-      m_eng::systems::SimulateFluid(state.ecs, dt * 4.0f, true);
+      m_eng::systems::SimulateFluid(state.ecs, -dt * 4.0f, true);
     }
     if (IsKeyDown(KEY_RIGHT)) {
       m_eng::systems::SimulateFluid(state.ecs, dt * 4.0f, true);
