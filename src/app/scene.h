@@ -18,7 +18,7 @@ struct Scene {
   void (*create_ui)(ECS&);
 };
 
-enum class SceneType { FLUID_SIM, KERNEL_DEMO, SMOOTHING_DEMO, DENSITY_DEMO, PRESSURE_DEMO };
+enum class SceneType { FLUID_SIM, KERNEL_DEMO, SMOOTHING_DEMO, DENSITY_DEMO, PRESSURE_DEMO, VISCOSITY_DEMO };
 
 namespace Scenes {
 

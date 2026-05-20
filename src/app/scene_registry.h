@@ -7,6 +7,7 @@
 #include "app/scenes/kernel_demo.h"
 #include "app/scenes/pressure_demo.h"
 #include "app/scenes/smoothing_demo.h"
+#include "app/scenes/viscosity_demo.h"
 
 namespace motrix::app {
 
@@ -24,7 +25,9 @@ constexpr Scene SMOOTHING_DEMO{"smoothing", InitSmoothingDemo,
 constexpr Scene DENSITY_DEMO{"density", InitDensityDemo, UpdateDensityDemo,
                              RenderDensityDemo, m_ett::CreateDensityDemoUI};
 constexpr Scene PRESSURE_DEMO{"pressure", InitPressureDemo, UpdatePressureDemo,
-                              RenderPressureDemo, CreatePressureDemoUI};
+                               RenderPressureDemo, CreatePressureDemoUI};
+constexpr Scene VISCOSITY_DEMO{"viscosity", InitViscosityDemo, UpdateViscosityDemo,
+                               RenderViscosityDemo, CreateViscosityDemoUI};
 
 inline const Scene& Get(SceneType type) {
   switch (type) {
@@ -38,6 +41,8 @@ inline const Scene& Get(SceneType type) {
       return DENSITY_DEMO;
     case SceneType::PRESSURE_DEMO:
       return PRESSURE_DEMO;
+    case SceneType::VISCOSITY_DEMO:
+      return VISCOSITY_DEMO;
   }
   return FLUID_SIM;
 }
@@ -53,6 +58,7 @@ constexpr NameEntry SCENE_NAMES[] = {
   {"smoothing", SceneType::SMOOTHING_DEMO},
   {"density", SceneType::DENSITY_DEMO},
   {"pressure", SceneType::PRESSURE_DEMO},
+  {"viscosity", SceneType::VISCOSITY_DEMO},
 };
 
 inline SceneType FindByName(const char* name) {
