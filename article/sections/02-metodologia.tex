@@ -616,7 +616,6 @@ void ComputePressureForce() {
       float ry = r_j.y - r.y;
 
       float dist = sqrt(rx * rx + ry * ry);
-
       if (dist > 0.0f && dist <= h) {
         Vector2 grad =
           SpikyKernelGradient(rx, ry, dist, h);
@@ -635,51 +634,118 @@ void ComputePressureForce() {
 \end{lstlisting}
 \hrule
 
-% \subsubsection{Cálculo da viscosidade}
-%
-% A viscosidade é responsável pela dissipação de energia e pelo amortecimento das
-% diferenças de velocidade entre partículas vizinhas. Esse efeito modela o atrito
-% interno do fluido e contribui para a estabilidade da simulação.
-%
-% No SPH, o termo viscoso é obtido utilizando o Laplaciano do kernel de
-% suavização. O operador Laplaciano é aproximado pela Equação
-% \ref{eq:sph_laplacian}:
-%
-% \begin{equation}
-% \nabla^2 A_S(r) =
-% \sum_j
-% m_j \frac{A_j}{\rho_j}
-% \nabla^2 W(r-r_j,h).
-% \label{eq:sph_laplacian}
-% \end{equation}
-%
-% Essa aproximação permite discretizar diretamente o termo viscoso das Equações
-% de Navier-Stokes:
-%
-% \begin{equation}
-% \nu \nabla^2 \mathbf{u},
-% \end{equation}
-%
-% em que \(\nu\) representa a viscosidade cinemática do fluido.
-%
-% Na prática, esse termo suaviza diferenças bruscas de velocidade entre
-% partículas próximas, reduzindo oscilações numéricas e produzindo um movimento
-% mais contínuo e estável.
-%
-% \begin{figure}[H]
-%   \centering
-%   \includegraphics[width=0.49\textwidth]{./fig/viscosity_effect.png}
-%   \caption{Efeito da viscosidade no amortecimento das diferenças de
-%   velocidade entre partículas vizinhas.}
-%   \label{fig:viscosity_effect}
-% \end{figure}
-%
-% Após o cálculo das forças de pressão, viscosidade e forças externas como a
-% gravidade \(\mathbf{g}\), a aceleração total de cada partícula é atualizada.
-% Com isso, velocidade e posição podem ser integradas numericamente ao longo do
-% tempo, permitindo a evolução dinâmica do fluido.
-%
-% Dessa forma, as equações contínuas de Navier-Stokes passam a ser representadas
-% por interações locais entre partículas vizinhas, permitindo simular o
-% comportamento macroscópico do fluido a partir de operações discretas e
-% computacionalmente viáveis.
+\subsubsection{Cálculo da viscosidade}
+
+A viscosidade é responsável pela dissipação de energia e pelo amortecimento das
+diferenças de velocidade entre partículas vizinhas. Esse efeito modela o atrito
+interno do fluido e contribui para a estabilidade da simulação.
+
+No SPH, o termo viscoso é obtido utilizando o Laplaciano do kernel de
+suavização. O operador Laplaciano é aproximado pela Equação
+\ref{eq:sph_laplacian}:
+
+\begin{equation}
+\nabla^2 A_S(r) =
+\sum_j
+m_j \frac{A_j}{\rho_j}
+\nabla^2 W(r-r_j,h).
+\label{eq:sph_laplacian}
+\end{equation}
+
+Essa aproximação permite discretizar diretamente o termo viscoso das Equações
+de Navier-Stokes:
+
+\begin{equation}
+\nu \nabla^2 \mathbf{u},
+\end{equation}
+
+em que \(\nu\) representa a viscosidade cinemática do fluido.
+
+Na prática, esse termo suaviza diferenças bruscas de velocidade entre
+partículas próximas, reduzindo oscilações numéricas e produzindo um movimento
+mais contínuo e estável.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.49\textwidth]{./fig/viscosity_effect.png}
+  \caption{Representação do efeito viscoso no método SPH. A viscosidade suaviza
+  diferenças locais de velocidade entre partículas vizinhas, produzindo um
+  escoamento mais contínuo e estável.}
+  \label{fig:viscosity_effect}
+\end{figure}
+
+A implementação do termo viscoso é apresentada no Código
+\ref{code:sph_viscosity}. Para cada partícula \(i\), o algoritmo percorre suas
+partículas vizinhas localizadas dentro do raio de suporte \(h\), calculando a
+diferença de velocidade entre as partículas e aplicando o Laplaciano do kernel
+de viscosidade por meio da função \texttt{ViscosityKernelLaplacian}. A
+contribuição viscosa é obtida a partir da viscosidade cinemática \(\nu\), da
+massa \(m\), da densidade da partícula vizinha \(\rho_j\) e da diferença
+relativa de velocidades. Essas contribuições são acumuladas no vetor
+\texttt{viscosity\_force}, produzindo uma força que suaviza diferenças bruscas
+de velocidade entre partículas próximas, aproximando numericamente o termo
+viscoso \((\nu \nabla^2 \mathbf{u})\) das equações de Navier-Stokes.
+
+\hfill
+\hrule
+\begin{lstlisting}[
+    style=prog,
+    language=C++,
+    caption={Cálculo das forças viscosas no método SPH},
+    label={code:sph_viscosity}
+]
+void ComputeViscosityForce() {
+  float h = entities::smoothing_radius;
+  float m = entities::particle_size;
+  float nu = entities::viscosity;
+  size_t N = particle_entities.size();
+
+  for (size_t i = 0; i < N; ++i) {
+    Vector2 v_i = particles[i].velocity;
+    float rho_i = particles[i].density;
+
+    Vector2 viscosity_force = {0.0f, 0.0f};
+    for (size_t j : GetNeighborParticles(i)) {
+      if (i == j) continue;
+
+      Vector2 v_j = particles[j].velocity;
+      float rho_j = particles[j].density;
+      Vector2 r =
+        particles[j].position
+        - particles[i].position;
+
+      float dist = sqrt(r.x * r.x + r.y * r.y);
+      if (dist > 0.0f && dist <= h) {
+        float laplacian =
+          ViscosityKernelLaplacian(dist, h);
+
+        Vector2 velocity_diff = {
+          v_j.x - v_i.x,
+          v_j.y - v_i.y
+        };
+
+        float viscosity =
+          (nu * m * laplacian) / rho_j;
+
+        viscosity_force.x +=
+          viscosity * velocity_diff.x;
+        viscosity_force.y +=
+          viscosity * velocity_diff.y;
+      }
+    }
+
+    particles[i].viscosity_force = viscosity_force;
+  }
+}
+\end{lstlisting}
+\hrule
+
+Após o cálculo das forças de pressão, viscosidade e forças externas como a
+gravidade \(\mathbf{g}\), a aceleração total de cada partícula é atualizada.
+Com isso, velocidade e posição podem ser integradas numericamente ao longo do
+tempo, permitindo a evolução dinâmica do fluido.
+
+Dessa forma, as equações contínuas de Navier-Stokes passam a ser representadas
+por interações locais entre partículas vizinhas, permitindo simular o
+comportamento macroscópico do fluido a partir de operações discretas e
+computacionalmente viáveis.
