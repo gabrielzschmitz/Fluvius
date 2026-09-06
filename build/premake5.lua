@@ -355,6 +355,7 @@ links({
 	"CoreAudio.framework",
 	"CoreVideo.framework",
 	"AudioToolbox.framework",
+	"QuartzCore.framework",
 })
 
 filter({})
@@ -464,6 +465,7 @@ if not _OPTIONS["with-emscripten"] then
 		"CoreAudio.framework",
 		"CoreVideo.framework",
 		"AudioToolbox.framework",
+		"QuartzCore.framework",
 	})
 
 	filter({ "system:windows", "action:gmake*" })
@@ -512,6 +514,7 @@ if not _OPTIONS["with-emscripten"] then
 		"CoreAudio.framework",
 		"CoreVideo.framework",
 		"AudioToolbox.framework",
+		"QuartzCore.framework",
 	})
 
 	filter({})
