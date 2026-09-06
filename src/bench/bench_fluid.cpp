@@ -228,29 +228,11 @@ static void ApplySimulationParameters(m_eng::ECS& ecs) {
   sim.surface_tension = kSurfaceTension;
 }
 
-// Fully resets the physics module's global buffers and the particle factory
-// so no leftover data from a previous particle count can influence the next
-// measurement. Simulation parameters state lives in each run's world (root
-// entity), so it needs no reset here.
+// Fully clears the particle factory's global entity list so no leftover data
+// from a previous particle count can influence the next measurement. All other
+// physics state lives in each run's world (root entity buffers), so it needs no
+// reset here.
 static void ResetPhysicsModule() {
-  // physics module buffers / caches
-  m_eng::systems::particle_entities.clear();
-  m_eng::systems::predicted_positions.clear();
-  m_eng::systems::pos_cache.clear();
-  m_eng::systems::vel_cache.clear();
-  m_eng::systems::circ_cache.clear();
-  m_eng::systems::particle_entities_cached = false;
-  m_eng::systems::spatial_grid.clear();
-  m_eng::systems::temp_densities.clear();
-  m_eng::systems::pressure_forces.clear();
-  m_eng::systems::viscosity_forces.clear();
-  m_eng::systems::cohesion_forces.clear();
-  m_eng::systems::densities.clear();
-  m_eng::systems::pressures.clear();
-  m_eng::systems::velocities.clear();
-  m_eng::systems::kernel_cache_valid = false;
-
-  // entity factory state
   m_ett::fluid_particles.clear();
 }
 
@@ -275,8 +257,6 @@ static void CreateWorld(m_eng::ECS& world, int threads, bool render,
 static void PrepareFluid(m_eng::ECS& ecs, int count) {
   m_ett::CreateFluid(ecs, static_cast<size_t>(count), true);
   m_ett::Simulation(ecs).particle_cache_dirty = true;
-  m_eng::systems::particle_entities_cached = false;
-  m_eng::systems::spatial_grid.clear();
 }
 
 // Renders a full 1920x1080 frame using the same pipeline (and scene) as the
