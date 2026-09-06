@@ -1,6 +1,7 @@
 // app/app.cpp
 #include "app/app.h"
 
+#include <cstdio>
 #include <thread>
 
 #include "app/app_state.h"
@@ -18,13 +19,22 @@ static bool SHOW_FPS = true;
 namespace m_app = motrix::app;
 namespace m_eng = motrix::engine;
 
-static void ParseCLIFlags(int argc, char** argv, m_app::SceneType& sceneType) {
+static void ParseCLIFlags(int argc, char** argv, m_app::SceneType& sceneType,
+                          bool& print_and_exit) {
   auto is_valid_scene_name = [](const char* name) -> bool {
     const auto& entry = m_app::Scenes::SCENE_NAMES;
     for (size_t i = 0; i < sizeof(entry) / sizeof(entry[0]); ++i) {
       if (strcmp(entry[i].name, name) == 0) return true;
     }
     return false;
+  };
+
+  auto print_scene_list = []() {
+    printf("Available scenes:\n");
+    const auto& entry = m_app::Scenes::SCENE_NAMES;
+    for (size_t i = 0; i < sizeof(entry) / sizeof(entry[0]); ++i) {
+      printf("  - %s\n", entry[i].name);
+    }
   };
 
   bool scene_set = false;
@@ -94,16 +104,22 @@ static void ParseCLIFlags(int argc, char** argv, m_app::SceneType& sceneType) {
       } else {
         logger::error("[CLI] Unknown scene '{}'", value);
       }
+    } else if (strcmp(arg, "--list-scenes") == 0 || strcmp(arg, "-ls") == 0) {
+      print_scene_list();
+      print_and_exit = true;
     } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
-      logger::info("Usage: fluvius [OPTIONS]");
-      logger::info("  -s, --scene <name>    Specify scene (kernel, fluid)");
-      logger::info("  -h, --help            Show this help message");
+      printf("Usage: fluvius [OPTIONS]\n");
+      printf("  -s, --scene <name>    Specify scene (fluid, kernel, "
+             "smoothing, density, pressure, viscosity)\n");
+      printf("  -ls, --list-scenes    List available scenes and exit\n");
+      printf("  -h, --help            Show this help message\n");
+      print_and_exit = true;
     } else if (arg[0] == '-') {
       logger::warn("[CLI] Unknown option: '{}'", arg);
     }
   }
 
-  if (!scene_set) {
+  if (!scene_set && !print_and_exit) {
     logger::info("[CLI] No scene specified, using default (fluid)");
   }
 }
@@ -160,7 +176,10 @@ static void RenderApp(m_app::AppState& state) {
 
 int RunApp(int argc, char** argv) {
   m_app::SceneType sceneType = m_app::SceneType::FLUID_SIM;
-  ParseCLIFlags(argc, argv, sceneType);
+  bool print_and_exit = false;
+  ParseCLIFlags(argc, argv, sceneType, print_and_exit);
+
+  if (print_and_exit) return 0;
 
   m_app::AppState state;
 
