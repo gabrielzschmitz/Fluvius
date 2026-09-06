@@ -7,11 +7,9 @@
 #include "engine/components/physics.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
+#include "entities/demo_state.h"
 
 namespace motrix::engine::systems {
-
-inline float blur_intensity = 0.85f;
-inline int particles_num = 100;
 
 inline void CreateKernelDemo(ECS& ecs, size_t particle_count = 100) {
   srand(12345);
@@ -33,6 +31,7 @@ inline void CreateKernelDemo(ECS& ecs, size_t particle_count = 100) {
 }
 
 inline void RenderKernel(ECS& ecs, const components::CameraComponent& cam) {
+  auto& ks = motrix::entities::KernelDemo(ecs);
   float canvasX = 0, canvasY = 0;
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvasComp) {
@@ -86,7 +85,7 @@ inline void RenderKernel(ECS& ecs, const components::CameraComponent& cam) {
       float baseX = canvasX + pos.position.x;
       float worldY = canvasTop + pos.position.y;
 
-      float blurRadius = 50.0f * blur_intensity;
+      float blurRadius = 50.0f * ks.blur_intensity;
       if (blurRadius > 0.5f) {
         DrawCircleGradient(Vector2{baseX, worldY}, blurRadius, circ.color,
                            Color{circ.color.r, circ.color.g, circ.color.b, 0});
@@ -116,10 +115,11 @@ inline void CreateKernelDemoUI(engine::ECS& ecs) {
   engine::Entity window =
     AddWindow(ecs, {20.f, CANVAS_H * uiScale / 2.f + 20.f}, 250.f, 70.f,
               "Kernel Demo Controls");
+  auto& ks = KernelDemo(ecs);
 
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Blur",
-            []() { return motrix::engine::systems::blur_intensity; },
-            [](float value) { motrix::engine::systems::blur_intensity = value; },
+            [&ks]() { return ks.blur_intensity; },
+            [&ks](float value) { ks.blur_intensity = value; },
             0.f, 1.f, 0.01f, nullptr,
             "Controls the blur intensity on the right side.");
 }
@@ -140,7 +140,8 @@ namespace m_ett = motrix::entities;
 inline void InitKernelDemo(AppState& state) {
   state.cameraEntity = m_ett::CreateCamera(state.ecs);
   state.canvasEntity = m_ett::CreateCanvasWithHandles(state.ecs, false);
-  m_eng::systems::CreateKernelDemo(state.ecs, m_eng::systems::particles_num);
+  m_eng::systems::CreateKernelDemo(
+    state.ecs, m_ett::KernelDemo(state.ecs).particles_num);
   m_ett::CreateKernelDemoUI(state.ecs);
 }
 

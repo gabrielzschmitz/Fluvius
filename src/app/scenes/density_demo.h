@@ -9,23 +9,13 @@
 #include "engine/systems/canvas.h"
 #include "engine/systems/fluid_render.h"
 #include "engine/systems/physics.h"
+#include "entities/demo_state.h"
 
 namespace motrix::engine::systems {
 
-inline int grid_columns = 13;
-inline int grid_rows = 7;
-inline float grid_columns_float = 13.f;
-inline float grid_rows_float = 7.f;
-inline float grid_smoothing_radius = 150.f;
-inline float grid_line_width = 2.f;
-inline float grid_particle_mass = 300.0f;
-inline float grid_font_size = 13.0f;
-inline float grid_particle_size = 11.0f;
-inline float grid_arrow_radius = 6.0f;
-inline int pending_columns = -1;
-inline int pending_rows = -1;
-
 inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
+  auto& ds = motrix::entities::DensityDemo(ecs);
+
   ecs.group_view<components::DensityParticleTag>(
     [&](Entity entity, components::DensityParticleTag&) {
       ecs.destroy_entity(entity);
@@ -41,7 +31,7 @@ inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
 
       Entity e = ecs.create_entity();
       ecs.add<components::PositionComponent>(e, Vector2{x, y});
-      ecs.add<components::CircleComponent>(e, grid_particle_size, GRAY);
+      ecs.add<components::CircleComponent>(e, ds.particle_size, GRAY);
       ecs.add<components::DensityParticleTag>(e);
     }
   }
@@ -52,15 +42,16 @@ inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
 
 inline void RenderDensityDemo(ECS& ecs,
                               const components::CameraComponent& cam) {
+  auto& ds = motrix::entities::DensityDemo(ecs);
   BeginMode2D(cam.camera);
 
   Vector2 center{CANVAS_W / 2.f, CANVAS_H / 2.f};
-  float h = grid_smoothing_radius;
+  float h = ds.smoothing_radius;
   float h2 = h * h;
-  float m = grid_particle_mass;
+  float m = ds.particle_mass;
 
   if (h > 0) {
-    DrawCircleV(center, h + grid_line_width, Color{255, 255, 255, 255});
+    DrawCircleV(center, h + ds.line_width, Color{255, 255, 255, 255});
     DrawCircleV(center, h, canvas_background_color());
     DrawCircleGradient(center, h, Color{255, 255, 255, 25},
                        Color{255, 255, 255, 1});
@@ -104,7 +95,7 @@ inline void RenderDensityDemo(ECS& ecs,
 
     Vector2 toCenter = Vector2Subtract(center, contrib.first);
     float dist = 1.0f - Vector2Distance(contrib.first, center);
-    systems::RenderArrow(contrib.first, toCenter, grid_arrow_radius, arrowColor,
+    systems::RenderArrow(contrib.first, toCenter, ds.arrow_radius, arrowColor,
                          0.4f * intensity);
   }
 
@@ -131,7 +122,7 @@ inline void RenderDensityDemo(ECS& ecs,
         particleColor = GRAY;
       }
 
-      float baseRadius = grid_particle_size;
+      float baseRadius = ds.particle_size;
       float radius = (dist < 1.0f) ? baseRadius * 1.5f : baseRadius;
       DrawCircleV(pos.position, radius, particleColor);
 
@@ -143,20 +134,20 @@ inline void RenderDensityDemo(ECS& ecs,
         char buffer[32];
         snprintf(buffer, sizeof(buffer), "%.0f%%", fraction);
         Vector2 textSize =
-          MeasureTextEx(defaultFont, buffer, grid_font_size, 0.0f);
+          MeasureTextEx(defaultFont, buffer, ds.font_size, 0.0f);
         DrawTextEx(defaultFont, buffer,
                    Vector2{pos.position.x - textSize.x / 2.0f,
                            pos.position.y - (textSize.y / 2.0f) + 1.0f},
-                   grid_font_size, 0.0f, particleColor);
+                   ds.font_size, 0.0f, particleColor);
       } else if (dist <= 1.0f) {
         char buffer[32];
         snprintf(buffer, sizeof(buffer), "%.0f", totalDensityScaled);
         Vector2 textSize =
-          MeasureTextEx(defaultFont, buffer, grid_font_size * 1.5f, 0.0f);
+          MeasureTextEx(defaultFont, buffer, ds.font_size * 1.5f, 0.0f);
         DrawTextEx(defaultFont, buffer,
                    Vector2{pos.position.x - textSize.x / 2.0f,
                            pos.position.y - (textSize.y / 2.0f) + 1.0f},
-                   grid_font_size * 1.5f, 0.0f, RED);
+                   ds.font_size * 1.5f, 0.0f, RED);
       }
     });
 
@@ -175,51 +166,44 @@ namespace motrix::entities {
 inline void CreateDensityDemoUI(engine::ECS& ecs) {
   engine::Entity window =
     AddWindow(ecs, {20.f, 20.f}, 250.f, 250.f, "Density Controls");
+  auto& ds = DensityDemo(ecs);
 
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Columns",
-            []() { return motrix::engine::systems::grid_columns_float; },
-            [](float value) {
-              motrix::engine::systems::grid_columns = static_cast<int>(value);
-              motrix::engine::systems::grid_columns_float = value;
-              motrix::engine::systems::pending_columns = static_cast<int>(value);
+            [&ds]() { return ds.columns_float; },
+            [&ds](float value) {
+              ds.columns = static_cast<int>(value);
+              ds.columns_float = value;
+              ds.pending_columns = static_cast<int>(value);
             },
             2.f, 50.f, 1.f, nullptr, "Number of columns in the grid.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Rows",
-            []() { return motrix::engine::systems::grid_rows_float; },
-            [](float value) {
-              motrix::engine::systems::grid_rows = static_cast<int>(value);
-              motrix::engine::systems::grid_rows_float = value;
-              motrix::engine::systems::pending_rows = static_cast<int>(value);
+            [&ds]() { return ds.rows_float; },
+            [&ds](float value) {
+              ds.rows = static_cast<int>(value);
+              ds.rows_float = value;
+              ds.pending_rows = static_cast<int>(value);
             },
             2.f, 20.f, 1.f, nullptr, "Number of rows in the grid.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Radius",
-            []() { return motrix::engine::systems::grid_smoothing_radius; },
-            [](float value) {
-              motrix::engine::systems::grid_smoothing_radius = value;
-            },
+            [&ds]() { return ds.smoothing_radius; },
+            [&ds](float value) { ds.smoothing_radius = value; },
             0.f, 320.f, 1.f, nullptr, "Smoothing radius around center particle.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Font Size",
-            []() { return motrix::engine::systems::grid_font_size; },
-            [](float value) { motrix::engine::systems::grid_font_size = value; },
+            [&ds]() { return ds.font_size; },
+            [&ds](float value) { ds.font_size = value; },
             6.f, 20.f, 1.f, nullptr, "Text font size.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Mass",
-            []() { return motrix::engine::systems::grid_particle_mass; },
-            [](float value) {
-              motrix::engine::systems::grid_particle_mass = value;
-            },
+            [&ds]() { return ds.particle_mass; },
+            [&ds](float value) { ds.particle_mass = value; },
             100.f, 10000.f, 100.f, nullptr,
             "Particle mass for density calculation.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Particle Size",
-            []() { return motrix::engine::systems::grid_particle_size; },
-            [](float value) {
-              motrix::engine::systems::grid_particle_size = value;
-            },
+            [&ds]() { return ds.particle_size; },
+            [&ds](float value) { ds.particle_size = value; },
             2.f, 15.f, 0.5f, nullptr, "Particle circle radius.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Arrow Radius",
-            []() { return motrix::engine::systems::grid_arrow_radius; },
-            [](float value) {
-              motrix::engine::systems::grid_arrow_radius = value;
-            },
+            [&ds]() { return ds.arrow_radius; },
+            [&ds](float value) { ds.arrow_radius = value; },
             0.f, 20.f, 0.5f, nullptr, "Arrow start radius from particle center.");
 }
 
@@ -239,29 +223,29 @@ namespace m_ett = motrix::entities;
 inline void InitDensityDemo(AppState& state) {
   state.cameraEntity = m_ett::CreateCamera(state.ecs);
   state.canvasEntity = m_ett::CreateCanvasWithHandles(state.ecs, false);
-  m_eng::systems::CreateDensityDemo(state.ecs, m_eng::systems::grid_columns,
-                                    m_eng::systems::grid_rows);
+  auto& ds = m_ett::DensityDemo(state.ecs);
+  m_eng::systems::CreateDensityDemo(state.ecs, ds.columns, ds.rows);
   m_ett::CreateDensityDemoUI(state.ecs);
 }
 
 inline void UpdateDensityDemo(AppState& state, float dt) {
   (void)dt;
+  auto& ds = m_ett::DensityDemo(state.ecs);
 
   bool needsRebuild = false;
-  if (m_eng::systems::pending_columns > 0) {
-    m_eng::systems::grid_columns = m_eng::systems::pending_columns;
-    m_eng::systems::pending_columns = -1;
+  if (ds.pending_columns > 0) {
+    ds.columns = ds.pending_columns;
+    ds.pending_columns = -1;
     needsRebuild = true;
   }
-  if (m_eng::systems::pending_rows > 0) {
-    m_eng::systems::grid_rows = m_eng::systems::pending_rows;
-    m_eng::systems::pending_rows = -1;
+  if (ds.pending_rows > 0) {
+    ds.rows = ds.pending_rows;
+    ds.pending_rows = -1;
     needsRebuild = true;
   }
 
   if (needsRebuild) {
-    m_eng::systems::CreateDensityDemo(state.ecs, m_eng::systems::grid_columns,
-                                      m_eng::systems::grid_rows);
+    m_eng::systems::CreateDensityDemo(state.ecs, ds.columns, ds.rows);
   }
 
   auto& cam =
