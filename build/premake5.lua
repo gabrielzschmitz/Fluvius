@@ -277,6 +277,7 @@ vpaths({
 })
 
 files({ "../src/**.c", "../src/**.cpp", "../src/**.h", "../src/**.hpp", "../include/**.h", "../include/**.hpp" })
+removefiles({ "../src/bench/**.cpp", "../src/bench/**.h" })
 
 -- For web builds, include raylib source files directly
 filter({ "options:with-emscripten" })
@@ -467,6 +468,51 @@ if not _OPTIONS["with-emscripten"] then
 
 	filter({ "system:windows", "action:gmake*" })
 	buildoptions({ "-Winvalid-pch" })
+
+	filter({})
+end
+
+-- Performance benchmark executable (headless physics by default, opengl33)
+if not _OPTIONS["with-emscripten"] then
+	project("fluvius-bench")
+	kind("ConsoleApp")
+	language("C++")
+	location("build_files/")
+	targetdir("../bin/%{cfg.buildcfg}")
+
+	files({ "../src/bench/**.cpp", "../src/bench/**.h" })
+
+	includedirs({ "../src", "../include", raylib_dir .. "/src" })
+
+	platform_defines()
+
+	links({ "raylib" })
+
+	filter({ "system:linux" })
+	links({ "pthread", "m", "dl", "rt" })
+
+	filter({ "system:linux", "options:wayland=on" })
+	links({ "wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon" })
+
+	filter({ "system:linux", "options:wayland=off" })
+	links({ "X11" })
+
+	filter({ "system:windows" })
+	defines({ "_WIN32", "NOMINMAX" })
+	links({ "winmm", "gdi32", "opengl32" })
+	libdirs({ "../bin/%{cfg.buildcfg}" })
+
+	filter({ "system:macosx" })
+	toolset("clang")
+	links({
+		"OpenGL.framework",
+		"Cocoa.framework",
+		"IOKit.framework",
+		"CoreFoundation.framework",
+		"CoreAudio.framework",
+		"CoreVideo.framework",
+		"AudioToolbox.framework",
+	})
 
 	filter({})
 end
