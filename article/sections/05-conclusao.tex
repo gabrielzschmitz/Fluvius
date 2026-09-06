@@ -1,5 +1,48 @@
 \section{Conclusão}
 \label{sec:conclusao}
 
-Apresente um resumo das principais descobertas do estudo, reforçando sua
-relevância e impacto. Evite introduzir novas informações nesta seção.
+% Apresente um resumo das principais descobertas do estudo, reforçando sua
+% relevância e impacto. Evite introduzir novas informações nesta seção.
+
+Este trabalho apresentou o desenvolvimento de uma simulação de fluidos baseada
+no método \textit{Smoothed Particle Hydrodynamics} (SPH), utilizando a
+arquitetura \textit{Entity Component System} (ECS) para organizar os dados e o
+processamento das partículas. A implementação foi construída a partir da
+discretização das equações de Navier-Stokes, incorporando os efeitos de
+pressão, viscosidade e forças externas, conforme a formulação utilizada em
+métodos SPH \cite{monaghan2005,muller2003particle}, com kernels especializados
+para o cálculo das diferentes propriedades físicas.
+
+Os resultados demonstraram que a abordagem adotada é capaz de produzir uma
+simulação visualmente coerente e executar milhares de partículas em tempo
+interativo. Também foi observado que o aumento da quantidade de partículas
+eleva o tempo necessário para processar cada passo e reduz a taxa de quadros,
+evidenciando o impacto das interações entre partículas sobre a escalabilidade
+do método. A comparação entre as execuções \textit{headless} e com renderização
+  mostrou ainda que a etapa gráfica representa um custo adicional relevante
+  para o desempenho da aplicação.
+
+A utilização do ECS mostrou-se adequada para estruturar o simulador, separando
+os dados das partículas dos sistemas responsáveis pelo processamento físico e
+pela renderização. Essa organização está de acordo com o princípio de separação
+entre dados e lógica associado a arquiteturas orientadas a dados, conforme
+discutido por Bilas \cite{bilas2002}. Dessa forma, o ECS estabelece uma base
+estrutural adequada para a modularidade do simulador e para futuras estratégias
+de paralelização e otimização.
+
+Apesar dos resultados obtidos, a implementação ainda apresenta limitações,
+principalmente relacionadas ao processamento concorrente e ao custo das
+interações entre partículas. Os problemas identificados na implementação de
+\textit{multi-thread} também comprometem parte das medições de desempenho,
+tornando necessária sua correção antes de uma avaliação definitiva da
+escalabilidade do sistema.
+
+Como continuidade deste trabalho, a implementação pode ser aprimorada por meio
+da otimização do processamento das vizinhanças, do paralelismo adequado entre
+os sistemas ECS e de técnicas de computação em GPU. Estratégias de aceleração
+do processamento de vizinhos e de paralelização são particularmente relevantes
+para métodos SPH devido ao grande número de operações envolvidas nas interações
+entre partículas \cite{koschier2020sph}. Essas melhorias podem permitir o
+processamento de uma quantidade maior de partículas, aumentar a taxa de quadros
+e ampliar a aplicabilidade da implementação em simulações interativas de maior
+escala.
