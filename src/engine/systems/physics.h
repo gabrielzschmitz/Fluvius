@@ -14,6 +14,7 @@
 #include "../components/physics.h"
 #include "../ecs/ecs.h"
 #include "../systems/canvas.h"
+#include "../systems/sph_kernels.h"
 #include "../systems/ui_helpers.h"
 #include "entities/fluid.h"
 #include "raylib.h"
@@ -27,7 +28,6 @@ namespace motrix::engine::systems {
  * ============================================================================
  */
 inline int num_threads = 1;
-inline pthread_t* thread_pool = nullptr;
 inline bool threads_initialized = false;
 inline ECS* ecs_ptr = nullptr;
 
@@ -52,75 +52,30 @@ inline int GetEffectiveThreads(size_t particle_count) {
 
 /**
  * ============================================================================
- * Parallel task system using pthreads
+ * Parallel chunk dispatch using pthreads
  * ============================================================================
+ *
+ * Runs `fn(&task)` concurrently over `particle_count` items split into
+ * `effective` contiguous chunks. Each task receives a thread index.
  */
-struct ParallelTask {
-  int start;
-  int end;
-  int thread_id;
-};
+template <typename Task, typename Fn>
+inline void RunParallelChunks(int effective, size_t particle_count,
+                              const Task& seed, Fn fn) {
+  int n = static_cast<int>(particle_count);
+  int chunk_size = n / effective;
+  if (chunk_size < 64) chunk_size = 64;
 
-inline pthread_mutex_t task_mutex = PTHREAD_MUTEX_INITIALIZER;
-inline int current_task_idx = 0;
-inline int total_tasks = 0;
-inline void* (*task_func)(void*) = nullptr;
-inline void* task_user_data = nullptr;
-inline pthread_mutex_t sim_mutex = PTHREAD_MUTEX_INITIALIZER;
+  std::vector<pthread_t> threads(effective);
+  std::vector<Task> tasks(effective);
 
-inline void* ThreadWorker(void* arg) {
-  int tid = *(int*)arg;
-
-  while (true) {
-    pthread_mutex_lock(&task_mutex);
-    if (current_task_idx >= total_tasks) {
-      pthread_mutex_unlock(&task_mutex);
-      break;
-    }
-    int start = current_task_idx;
-    current_task_idx += std::min(100, total_tasks - current_task_idx);
-    pthread_mutex_unlock(&task_mutex);
-
-    for (int i = start; i < std::min(start + 100, total_tasks) &&
-                        i < start + (total_tasks - start);
-         ++i) {
-      if (task_func) {
-        ParallelTask task;
-        task.start = i;
-        task.end = std::min(i + 1, total_tasks);
-        task.thread_id = tid;
-        task_func(&task);
-      }
-    }
-  }
-  return nullptr;
-}
-
-inline void RunParallel(int total, void* user_data, void* (*func)(void*)) {
-  if (!threads_initialized || num_threads <= 1 || total < 500) {
-    task_user_data = user_data;
-    task_func = func;
-    current_task_idx = 0;
-    total_tasks = total;
-    ParallelTask single_task{0, total, 0};
-    if (func) func(&single_task);
-    return;
+  for (int i = 0; i < effective; ++i) {
+    tasks[i] = seed;
+    tasks[i].start = i * chunk_size;
+    tasks[i].end = std::min(tasks[i].start + chunk_size, n);
+    pthread_create(&threads[i], nullptr, fn, &tasks[i]);
   }
 
-  task_user_data = user_data;
-  task_func = func;
-  current_task_idx = 0;
-  total_tasks = total;
-
-  std::vector<pthread_t> threads(num_threads);
-  std::vector<int> thread_ids(num_threads);
-
-  for (int i = 0; i < num_threads; ++i) {
-    thread_ids[i] = i;
-    pthread_create(&threads[i], nullptr, ThreadWorker, &thread_ids[i]);
-  }
-
-  for (int i = 0; i < num_threads; ++i) {
+  for (int i = 0; i < effective; ++i) {
     pthread_join(threads[i], nullptr);
   }
 }
@@ -165,32 +120,11 @@ inline void CacheParticleEntities(ECS& ecs) {
 
 /**
  * ============================================================================
- * Spatial Hash
+ * Runtime Buffers
  * ============================================================================
  */
-
-struct GridCell {
-  int x;
-  int y;
-
-  bool operator==(const GridCell& other) const {
-    return x == other.x && y == other.y;
-  }
-};
-
-struct GridCellHash {
-  size_t operator()(const GridCell& c) const {
-    return std::hash<int>()(c.x * 73856093) ^ std::hash<int>()(c.y * 19349663);
-  }
-};
-
 inline std::unordered_map<GridCell, std::vector<size_t>, GridCellHash>
   spatial_grid;
-
-inline GridCell PositionToCell(Vector2 p, float cell_size) {
-  return {static_cast<int>(std::floor(p.x / cell_size)),
-          static_cast<int>(std::floor(p.y / cell_size))};
-}
 
 inline void BuildSpatialGrid() {
   spatial_grid.clear();
@@ -202,74 +136,15 @@ inline void BuildSpatialGrid() {
   }
 }
 
-/**
- * ============================================================================
- * Kernels
- * ============================================================================
- */
-inline float cached_h = 0.f;
-inline float cached_h2 = 0.f;
-inline float cached_viscosity = 0.f;
-inline float cached_surface_tension = 0.f;
-inline float cached_mass = 0.f;
 inline float cached_gravity_accel = 0.f;
 inline bool kernel_cache_valid = false;
 
 inline void UpdateKernelCache() {
-  if (kernel_cache_valid && cached_h == entities::smoothing_radius
-      && cached_gravity_accel == entities::gravity * 10.f) return;
-  cached_h = entities::smoothing_radius;
-  cached_h2 = cached_h * cached_h;
+  if (kernel_cache_valid && cached_gravity_accel == entities::gravity * 10.f)
+    return;
   cached_gravity_accel = entities::gravity * 10.f;
-  cached_viscosity = entities::viscosity;
-  cached_surface_tension = entities::surface_tension;
-  cached_mass = entities::particle_size;
   kernel_cache_valid = true;
 }
-
-inline float Poly6Kernel(float r2, float h) {
-  float h2 = h * h;
-  if (r2 >= h2) return 0.f;
-  float diff = h2 - r2;
-  float h9 = h * h * h * h * h * h * h * h * h;
-  return 315.f / (64.f * PI * h9) * diff * diff * diff;
-}
-
-inline float SpikyKernelGradient(float r, float h) {
-  if (r <= 0.f || r >= h) return 0.f;
-  float h5 = h * h * h * h * h;
-  float v = h - r;
-  return -15.f / (PI * h5) * v * v;
-}
-
-inline float ViscosityKernel(float r, float h) {
-  if (r >= h) return 0.f;
-  float h5 = h * h * h * h * h;
-  return 15.f / (2.f * PI * h5) * (h - r);
-}
-
-inline float FluidFieldKernel(float dist_sq, float radius_sq) {
-  if (dist_sq >= radius_sq) return 0.f;
-
-  float x = 1.f - (dist_sq / radius_sq);
-
-  return x * x;
-}
-
-inline Vector2 InterpolateEdge(Vector2 a, Vector2 b, float va, float vb,
-                               float threshold) {
-  if (fabsf(vb - va) < 0.0001f) return a;
-
-  float t = (threshold - va) / (vb - va);
-
-  return {a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t};
-}
-
-/**
- * ============================================================================
- * Pressure
- * ============================================================================
- */
 
 inline float ConvertDensityToPressure(float density) {
   return (density - entities::target_density) * entities::pressure_multiplier;
@@ -326,43 +201,31 @@ inline void PredictPositions(ECS& ecs, float dt) {
   size_t n = particle_entities.size();
   int effective = GetEffectiveThreads(n);
 
-  if (effective > 1 && n >= 256) {
-    struct PredictTask {
-      int start;
-      int end;
-      float grav;
-      float dt;
-    };
-    std::vector<pthread_t> threads(effective);
-    std::vector<PredictTask> tasks(effective);
-
-    for (int ti = 0; ti < effective; ++ti) {
-      tasks[ti].start = ti * n / effective;
-      tasks[ti].end = (ti + 1) * n / effective;
-      tasks[ti].grav = gravity;
-      tasks[ti].dt = dt;
-      pthread_create(
-        &threads[ti], nullptr,
-        [](void* arg) -> void* {
-          auto* tk = (PredictTask*)arg;
-          for (int i = tk->start; i < tk->end; ++i) {
-            vel_cache[i]->velocity.y += tk->grav * tk->dt;
-            predicted_positions[i] = {
-              pos_cache[i]->position.x + vel_cache[i]->velocity.x * tk->dt,
-              pos_cache[i]->position.y + vel_cache[i]->velocity.y * tk->dt};
-          }
-          return nullptr;
-        },
-        &tasks[ti]);
-    }
-    for (int ti = 0; ti < effective; ++ti) pthread_join(threads[ti], nullptr);
-  } else {
+  if (effective <= 1 || n < 256) {
     for (size_t i = 0; i < n; ++i) {
       vel_cache[i]->velocity.y += gravity * dt;
       predicted_positions[i] = {
         pos_cache[i]->position.x + vel_cache[i]->velocity.x * dt,
         pos_cache[i]->position.y + vel_cache[i]->velocity.y * dt};
     }
+  } else {
+    struct PredictTask {
+      int start;
+      int end;
+      float grav;
+      float dt;
+    };
+    PredictTask seed{0, 0, gravity, dt};
+    RunParallelChunks(effective, n, seed, [](void* arg) -> void* {
+      auto* tk = static_cast<PredictTask*>(arg);
+      for (int i = tk->start; i < tk->end; ++i) {
+        vel_cache[i]->velocity.y += tk->grav * tk->dt;
+        predicted_positions[i] = {
+          pos_cache[i]->position.x + vel_cache[i]->velocity.x * tk->dt,
+          pos_cache[i]->position.y + vel_cache[i]->velocity.y * tk->dt};
+      }
+      return nullptr;
+    });
   }
 
   BuildSpatialGrid();
@@ -442,16 +305,9 @@ inline void ComputeParticlePressure(ECS& ecs) {
  * ============================================================================
  */
 
-inline float CohesionKernel(float r, float h) {
-  if (r >= h * 0.5f) return 0.f;
-  float q = r / (h * 0.5f);
-  return (1.f - q) * (1.f - q);
-}
-
 struct ParallelForceTask {
   int start;
   int end;
-  float dt;
 };
 
 inline std::vector<Vector2> pressure_forces;
@@ -459,20 +315,16 @@ inline std::vector<Vector2> viscosity_forces;
 inline std::vector<Vector2> cohesion_forces;
 inline std::vector<float> densities;
 inline std::vector<float> pressures;
-inline std::vector<float> mass_densities;
 inline std::vector<Vector2> velocities;
 
 inline void* ComputePressureForceRange(void* arg) {
   auto* task = static_cast<ParallelForceTask*>(arg);
   int start = task->start;
   int end = task->end;
-  float dt = task->dt;
 
   float h = entities::smoothing_radius;
   float h2 = h * h;
   float mass = entities::particle_size;
-  float viscosity = entities::viscosity;
-  float surface_tension = entities::surface_tension;
 
   for (int i = start; i < end && i < static_cast<int>(particle_entities.size());
        ++i) {
@@ -481,7 +333,6 @@ inline void* ComputePressureForceRange(void* arg) {
 
     float d1 = densities[i];
     float p1_pressure = pressures[i];
-    float md1 = mass_densities[i];
     Vector2 v1 = velocities[i];
 
     Vector2 pressure_force{0.f, 0.f};
@@ -515,7 +366,6 @@ inline void* ComputePressureForceRange(void* arg) {
 
           float d2 = densities[j];
           float p2_pressure = pressures[j];
-          float md2 = mass_densities[j];
           Vector2 v2 = velocities[j];
 
           float term = (p1_pressure / (d1 * d1)) + (p2_pressure / (d2 * d2));
@@ -636,7 +486,6 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
   cohesion_forces.resize(n);
   densities.resize(n);
   pressures.resize(n);
-  mass_densities.resize(n);
   velocities.resize(n);
 
   for (int i = 0; i < n; ++i) {
@@ -644,26 +493,11 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
     auto& v = ecs_ptr->get<components::VelocityComponent>(particle_entities[i]);
     densities[i] = c.density;
     pressures[i] = c.pressure;
-    mass_densities[i] = c.density * c.density;
     velocities[i] = v.velocity;
   }
 
-  int chunk_size = n / effective_threads;
-  if (chunk_size < 64) chunk_size = 64;
-
-  std::vector<pthread_t> threads(effective_threads);
-  std::vector<ParallelForceTask> tasks(effective_threads);
-
-  for (int i = 0; i < effective_threads; ++i) {
-    tasks[i].start = i * chunk_size;
-    tasks[i].end = std::min(tasks[i].start + chunk_size, n);
-    tasks[i].dt = dt;
-    pthread_create(&threads[i], nullptr, ComputePressureForceRange, &tasks[i]);
-  }
-
-  for (int i = 0; i < effective_threads; ++i) {
-    pthread_join(threads[i], nullptr);
-  }
+  ParallelForceTask seed{0, 0};
+  RunParallelChunks(effective_threads, n, seed, ComputePressureForceRange);
 
   float viscosity = entities::viscosity;
   float surface_tension = entities::surface_tension;
@@ -689,30 +523,44 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
  * ============================================================================
  */
 
-inline bool IsMouseOverCanvas(ECS& ecs, Vector2 mouse_world) {
-  bool over_canvas = false;
+inline bool IsCanvasHit(ECS& ecs, Vector2 mouse_world, float tolerance) {
+  bool hit = false;
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
       Vector2 local_mouse = WorldToCanvasLocal(mouse_world, canvas);
 
-      bool touching_left =
-        local_mouse.x >= -canvas.half_extents.x - canvas.edge_tolerance &&
-        local_mouse.x <= -canvas.half_extents.x + canvas.edge_tolerance;
-      bool touching_right =
-        local_mouse.x >= canvas.half_extents.x - canvas.edge_tolerance &&
-        local_mouse.x <= canvas.half_extents.x + canvas.edge_tolerance;
-      bool touching_top =
-        local_mouse.y >= -canvas.half_extents.y - canvas.edge_tolerance &&
-        local_mouse.y <= -canvas.half_extents.y + canvas.edge_tolerance;
-      bool touching_bottom =
-        local_mouse.y >= canvas.half_extents.y - canvas.edge_tolerance &&
-        local_mouse.y <= canvas.half_extents.y + canvas.edge_tolerance;
+      auto within = [](float value, float edge, float tol) {
+        return value >= edge - tol && value <= edge + tol;
+      };
 
-      if (touching_left || touching_right || touching_top || touching_bottom) {
-        over_canvas = true;
-      }
+      bool inside =
+        local_mouse.x >= -canvas.half_extents.x &&
+        local_mouse.x <= canvas.half_extents.x &&
+        local_mouse.y >= -canvas.half_extents.y &&
+        local_mouse.y <= canvas.half_extents.y;
+
+      bool touching_edge =
+        within(local_mouse.x, -canvas.half_extents.x, tolerance) ||
+        within(local_mouse.x, canvas.half_extents.x, tolerance) ||
+        within(local_mouse.y, -canvas.half_extents.y, tolerance) ||
+        within(local_mouse.y, canvas.half_extents.y, tolerance);
+
+      hit = tolerance > 0.f ? touching_edge : inside;
     });
-  return over_canvas;
+  return hit;
+}
+
+inline bool IsMouseOverCanvas(ECS& ecs, Vector2 mouse_world) {
+  float tolerance = 0.f;
+  ecs.group_view<components::CanvasComponent>(
+    [&](Entity, components::CanvasComponent& canvas) {
+      tolerance = canvas.edge_tolerance;
+    });
+  return IsCanvasHit(ecs, mouse_world, tolerance);
+}
+
+inline bool IsMouseOnCanvas(ECS& ecs, Vector2 mouse_world) {
+  return IsCanvasHit(ecs, mouse_world, 0.f);
 }
 
 inline void UpdateSelectionInput(
@@ -741,21 +589,6 @@ inline void UpdateSelectionInput(
     entities::selection_locked = false;
     entities::selection_density = 0.f;
   }
-}
-
-inline bool IsMouseOnCanvas(ECS& ecs, Vector2 mouse_world) {
-  bool on_canvas = false;
-  ecs.group_view<components::CanvasComponent>(
-    [&](Entity, components::CanvasComponent& canvas) {
-      Vector2 local_mouse = WorldToCanvasLocal(mouse_world, canvas);
-      if (local_mouse.x >= -canvas.half_extents.x &&
-          local_mouse.x <= canvas.half_extents.x &&
-          local_mouse.y >= -canvas.half_extents.y &&
-          local_mouse.y <= canvas.half_extents.y) {
-        on_canvas = true;
-      }
-    });
-  return on_canvas;
 }
 
 inline void UpdatePathInput(ECS& ecs,
@@ -880,37 +713,6 @@ inline void RenderArrow(Vector2 center, Vector2 vector, float radius,
   DrawCircleV(end, thickness * 0.5f, color);
 }
 
-inline Color VelocityToColor(const Vector2& velocity) {
-  const float speed = Vector2Length(velocity);
-  constexpr float max_speed = 80.f;
-
-  float speed_ratio = Clamp(speed / max_speed, 0.f, 1.f);
-
-  auto LerpChannel = [](unsigned char a, unsigned char b, float factor) {
-    return static_cast<unsigned char>(a + (b - a) * factor);
-  };
-
-  auto LerpColor = [&](Color c1, Color c2, float factor) {
-    return Color{LerpChannel(c1.r, c2.r, factor),
-                 LerpChannel(c1.g, c2.g, factor),
-                 LerpChannel(c1.b, c2.b, factor), 255};
-  };
-
-  if (speed_ratio < 0.33f) {
-    float t = speed_ratio / 0.33f;
-    return LerpColor(entities::particle_low_color,
-                     entities::particle_mid_low_color, t);
-  } else if (speed_ratio < 0.66f) {
-    float t = (speed_ratio - 0.33f) / 0.33f;
-    return LerpColor(entities::particle_mid_low_color,
-                     entities::particle_mid_high_color, t);
-  } else {
-    float t = (speed_ratio - 0.66f) / 0.34f;
-    return LerpColor(entities::particle_mid_high_color,
-                     entities::particle_high_color, t);
-  }
-}
-
 inline Color SpeedToColor(float speed) {
   constexpr float max_speed = 80.f;
   float speed_ratio = Clamp(speed / max_speed, 0.f, 1.f);
@@ -938,6 +740,10 @@ inline Color SpeedToColor(float speed) {
     return BlendColor(entities::particle_mid_high_color,
                       entities::particle_high_color, t);
   }
+}
+
+inline Color VelocityToColor(const Vector2& velocity) {
+  return SpeedToColor(Vector2Length(velocity));
 }
 
 inline void RenderFluid(ECS& ecs,
@@ -1089,14 +895,13 @@ inline void RenderFluidFilled(ECS& ecs,
 
       if (state == 0) continue;
 
-      float offset_x = 0.f;
-      Vector2 p0{float(x * cell_size) - he_x - offset_x,
+      Vector2 p0{float(x * cell_size) - he_x,
                  float(y * cell_size) - he_y};
-      Vector2 p1{float((x + 1) * cell_size) - he_x - offset_x,
+      Vector2 p1{float((x + 1) * cell_size) - he_x,
                  float(y * cell_size) - he_y};
-      Vector2 p2{float((x + 1) * cell_size) - he_x - offset_x,
+      Vector2 p2{float((x + 1) * cell_size) - he_x,
                  float((y + 1) * cell_size) - he_y};
-      Vector2 p3{float(x * cell_size) - he_x - offset_x,
+      Vector2 p3{float(x * cell_size) - he_x,
                  float((y + 1) * cell_size) - he_y};
 
       Vector2 a = InterpolateEdge(p0, p1, v0, v1, threshold);
@@ -1636,23 +1441,10 @@ inline void ComputeParticleDensity(ECS& ecs) {
   }
 
   int n = static_cast<int>(particle_entities.size());
-  int chunk_size = n / effective_threads;
-  if (chunk_size < 64) chunk_size = 64;
-
   temp_densities.resize(n);
 
-  std::vector<pthread_t> threads(effective_threads);
-  std::vector<ParallelDensityTask> tasks(effective_threads);
-
-  for (int i = 0; i < effective_threads; ++i) {
-    tasks[i].start = i * chunk_size;
-    tasks[i].end = std::min(tasks[i].start + chunk_size, n);
-    pthread_create(&threads[i], nullptr, ComputeDensityRange, &tasks[i]);
-  }
-
-  for (int i = 0; i < effective_threads; ++i) {
-    pthread_join(threads[i], nullptr);
-  }
+  ParallelDensityTask seed{0, 0};
+  RunParallelChunks(effective_threads, n, seed, ComputeDensityRange);
 
   for (int i = 0; i < n; ++i) {
     auto& c = ecs_ptr->get<components::CircleComponent>(particle_entities[i]);
@@ -1684,9 +1476,7 @@ inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
 
   size_t n = particle_entities.size();
   for (size_t i = 0; i < n; ++i) {
-    components::CircleComponent* c = circ_cache[i];
-    c->radius = entities::particle_size;
-    c->particle_size = entities::particle_size;
+    circ_cache[i]->radius = entities::particle_size;
   }
 
   for (size_t i = 0; i < n; ++i) {

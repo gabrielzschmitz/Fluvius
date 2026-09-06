@@ -233,13 +233,11 @@ static void ResetPhysicsModule() {
   m_eng::systems::cohesion_forces.clear();
   m_eng::systems::densities.clear();
   m_eng::systems::pressures.clear();
-  m_eng::systems::mass_densities.clear();
   m_eng::systems::velocities.clear();
   m_eng::systems::kernel_cache_valid = false;
 
   // entity factory state
   m_ett::fluid_particles.clear();
-  m_ett::cameras.clear();
   m_ett::user_path_points.clear();
   m_ett::is_drawing_path = false;
   m_ett::selection_locked = false;
