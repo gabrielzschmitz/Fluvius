@@ -1,6 +1,108 @@
 \section{Resultados}
 \label{sec:resultados}
 
-Os resultados devem ser apresentados de forma clara e objetiva. Gráficos,
-tabelas e figuras podem ser utilizados para melhor visualização dos dados
+% Os resultados devem ser apresentados de forma clara e objetiva. Gráficos,
+% tabelas e figuras podem ser utilizados para melhor visualização dos dados
+% obtidos.
+
+Esta seção apresenta os resultados obtidos com a implementação do método
+\textit{Smoothed Particle Hydrodynamics} (SPH) utilizando a arquitetura
+\textit{Entity Component System} (ECS). Inicialmente são descritas as
+configurações utilizadas durante os experimentos. Em seguida, são analisados os
+comportamentos físicos observados na simulação, incluindo os efeitos da
+gravidade, pressão e viscosidade sobre o fluido. Também são discutidos os
+impactos dos kernels utilizados na estabilidade da simulação, bem como aspectos
+relacionados ao desempenho computacional da implementação.
+
+\subsection{Configuração da simulação}
+\label{subsec:simulation_setup}
+
+Os experimentos foram realizados utilizando uma simulação bidimensional baseada
+em partículas SPH. Cada partícula representa uma pequena porção do fluido e
+armazena propriedades físicas locais utilizadas durante os cálculos de
+densidade, pressão e viscosidade.
+
+A implementação foi desenvolvida e executada em um notebook Acer Predator
+Helios Neo 16S AI. A Tabela~\ref{tab:hardware_specs} apresenta a configuração
+de hardware e software utilizada durante os experimentos.
+
+\begin{table}[H]
+\centering
+\caption{Configuração do ambiente utilizado nos experimentos.}
+\label{tab:hardware_specs}
+\begin{tabular}{l l}
+\hline
+Componente & Especificação \\
+\hline
+Sistema operacional & CachyOS Linux x86\_64 \\
+Kernel & Linux 7.0.10 \\
+Processador & Intel Core Ultra 9 275HX \\
+Quantidade de núcleos & 24 núcleos, 24 threads \\
+Frequência máxima & 5.40 GHz \\
+GPU dedicada & NVIDIA GeForce RTX 5070 Ti Mobile \\
+GPU integrada & Intel Graphics \\
+Memória RAM & 32 GB DDR5 6400MHz \\
+\hline
+\end{tabular}
+\end{table}
+
+A Tabela~\ref{tab:simulation_parameters} apresenta os principais parâmetros
+utilizados durante os experimentos.
+
+\begin{table}[H]
+\centering
+\caption{Parâmetros utilizados na simulação SPH.}
+\label{tab:simulation_parameters}
+\begin{tabular}{l c}
+\hline
+Parâmetro & Valor \\
+\hline
+Quantidade de partículas & 50 -- 10000 \\
+Tamanho de partícula & 2.0 \\
+Raio de suporte \(h\) & 50.0 \\
+Passo temporal \(\Delta t\) & 5.0 \\
+Densidade alvo \(\rho\) & 0.000425 \\
+Viscosidade \(\nu\) & 0.8 \\
+Multiplicador de Pressão \(\left-\nabla p / \rho\right\) & 250.0 \\
+Gravidade \(g\) & 1.0 \\
+Resolução da simulação & \(1920 \times 1080\) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Resultados de desempenho}
+\label{subsec:computational_performance}
+
+O desempenho foi avaliado considerando diferentes quantidades de partículas,
+permitindo analisar o impacto do aumento da carga computacional sobre a
+simulação. A Figura~\ref{fig:performance_graph} apresenta os resultados
 obtidos.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.49\textwidth]{./fig/performance_graph.png}
+\caption{Desempenho da simulação em função da quantidade de partículas.}
+\label{fig:performance_graph}
+\end{figure}
+
+Observa-se que o custo computacional aumenta conforme o número de partículas
+cresce, principalmente devido ao cálculo das interações entre partículas
+vizinhas realizado a cada passo de simulação. A utilização da arquitetura ECS
+favorece a organização dos dados e o processamento sequencial dos componentes,
+contribuindo para uma melhor localidade de memória durante esses cálculos.
+
+Os resultados indicam que a implementação é capaz de executar a simulação em
+tempo real para a configuração avaliada, embora o aumento da quantidade de
+partículas imponha um crescimento significativo no custo computacional.
+
+\subsection{Limitações}
+\label{subsec:implementation_limitations}
+
+A principal limitação observada está relacionada ao custo das interações entre
+partículas, que se torna mais significativo à medida que a quantidade de
+partículas aumenta. A implementação também utiliza uma formulação fracamente
+compressível, podendo apresentar pequenas variações de densidade.
+
+Além disso, não foram incorporadas técnicas de otimização e recursos presentes
+em simuladores mais avançados, como aceleração em GPU, estruturas espaciais
+especializadas, refinamento adaptativo e modelos de tensão superficial.

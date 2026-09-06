@@ -165,40 +165,92 @@ mantendo a densidade aproximadamente constante ao longo da simulação.
 \subsection{Aplicando à simulação}
 \label{subsec:aplicando-a-simulacao}
 
-No método SPH, as equações diferenciais contínuas apresentadas anteriormente
-(\ref{eq:navier_stokes_momentum} e \ref{eq:navier_stokes_incompressibility})
-são convertidas em interações discretas entre partículas. Em vez de resolver as
-derivadas diretamente em um domínio contínuo, cada partícula do fluido passa a
-armazenar propriedades físicas locais, como posição, velocidade, densidade e
-pressão. A dinâmica do fluido emerge da interação entre partículas vizinhas
-dentro de um raio de influência definido pelo kernel de suavização.
+No método SPH, as equações diferenciais contínuas apresentadas
+anteriormente~(\ref{eq:navier_stokes_momentum} e
+\ref{eq:navier_stokes_incompressibility}) são convertidas em interações
+discretas entre partículas. Em vez de resolver diretamente as derivadas em um
+domínio contínuo, o fluido é mapeado por um conjunto finito de nós massivos
+discretos (as partículas), os quais armazenam propriedades físicas locais, como
+posição, velocidade, densidade e pressão. A dinâmica macroscópica do meio
+contínuo emerge, portanto, das interações locais entre partículas vizinhas
+dentro de um raio de influência delimitado pelo kernel de suavização.
 
-A cada passo de tempo da simulação, as partículas executam uma sequência de
-cálculos numéricos responsáveis por aproximar os termos presentes nas Equações
-de Navier-Stokes. Inicialmente são identificadas as partículas vizinhas dentro
-do raio de suporte \(h\). Em seguida, são calculadas a densidade local, a
-pressão, as forças viscosas e, por fim, a aceleração resultante aplicada à
-partícula.
-
-A aproximação de uma grandeza escalar \(A\) na posição \(r\) é dada pela
-Equação \ref{eq:sph_interpolation}:
+Matematicamente, as grandezas físicas do fluido são aproximadas numericamente
+sobre esse conjunto discreto. Propriedades contínuas são interpoladas
+localmente utilizando as contribuições das partículas vizinhas, ponderadas pela
+função kernel. A aproximação de uma grandeza escalar qualquer $A$ na posição
+espacial $r$ é regida pela Equação~\ref{eq:sph_interpolation}:
 
 \begin{equation}
-A_S(r) =
-\sum_j
-m_j \frac{A_j}{\rho_j}
-W(r - r_j, h),
+A_S(r) = \sum_j m_j \frac{A_j}{\rho_j} W(r-r_j,h),
 \label{eq:sph_interpolation}
 \end{equation}
 
-em que \(m_j\) representa a massa da partícula \(j\), \(A_j\) a grandeza física
-associada à partícula, \(\rho_j\) sua densidade, \(r_j\) sua posição e
-\(W(r-r_j,h)\) o kernel de suavização com raio de suporte \(h\).
+em que $m_j$ representa a massa da partícula $j$, $A_j$ denota a
+grandeza física associada a ela, $\rho_j$ equivale à sua densidade local, $r_j$
+define sua posição espacial e $W(r-r_j,h)$ corresponde ao kernel de suavização
+dotado de raio de suporte $h$. Dessa forma, os operadores diferenciais
+presentes na Equação de Navier-Stokes são convertidos em somatórios locais
+sobre a vizinhança, transformando o sistema contínuo em uma formulação
+computacionalmente viável.
 
-Dessa forma, as derivadas presentes na Equação \ref{eq:navier_stokes_momentum}
-passam a ser aproximadas por somatórios locais sobre partículas vizinhas,
-permitindo transformar o problema contínuo em uma formulação computacional
-discreta.
+Para traduzir esse arcabouço matemático em um ambiente virtual de alto
+desempenho, a implementação do simulador foi estruturada sob o paradigma
+\textit{Entity Component System} (ECS). Essa abordagem permite a separação
+estrita entre os dados físicos e os algoritmos de processamento do método SPH.
+Sob essa ótica, cada partícula é tratada puramente como uma entidade, cujos
+atributos e estados são distribuídos em componentes especializados, enquanto
+sistemas independentes encapsulam as etapas de cálculo numérico executadas a
+cada passo de tempo $\Delta t$.
+
+Na arquitetura desenvolvida, a entidade-partícula é composta por quatro
+estruturas fundamentais:
+
+\begin{itemize}
+    \item \texttt{PositionComponent}: armazena as coordenadas espaciais da
+      partícula;
+    \item \texttt{VelocityComponent}: mantém o vetor de velocidade linear
+      utilizado na integração temporal;
+    \item \texttt{DensityComponent}: encapsula as propriedades de estado do
+      fluido, especificamente a densidade local ($\rho$) e a pressão interna
+      ($p$);
+    \item \texttt{CircleComponent}: retém os atributos estéticos e primitivas
+      geométricas necessárias para o pipeline de renderização.
+\end{itemize}
+
+O fluxo de processamento físico e a translação desses dados são operados por
+sistemas dedicados que percorrem as entidades de forma sequencial.
+Inicialmente, o sistema \texttt{ComputeDensity()} calcula a densidade local a
+partir da distribuição espacial dos vizinhos. Na sequência, os sistemas
+\texttt{ComputePressureForce()} e \texttt{ComputeViscosityForce()} determinam,
+respectivamente, as forças repulsivas de pressão e o termo viscoso associado à
+dissipação interna de energia. 
+
+Dispostas as forças resultantes, o sistema \texttt{UpdatePosition()} realiza a
+integração temporal para atualizar o estado cinemático do sistema. Por fim, o
+pipeline é concluído com o sistema \texttt{RenderParticle()}, responsável pela
+rasterização do fluido. A Figura~\ref{fig:ecs_overview} ilustra a topologia
+dessa organização e o fluxo de dependências entre os módulos.
+
+\begin{figure}[H]
+  \centering
+  \setlength{\fboxsep}{0pt}
+  \includegraphics[width=0.495\textwidth]{./fig/ecs_overview.png}
+  \caption{Organização da simulação SPH utilizando a arquitetura ECS e fluxo de
+  dependências dos sistemas responsáveis pelo cálculo físico, integração
+  temporal e renderização das partículas.}
+  \label{fig:ecs_overview}
+\end{figure}
+
+Além de isolar as responsabilidades do código, a adoção da arquitetura ECS
+oferece vantagens cruciais de desempenho para simulações de mecânica dos
+fluidos. Como todas as partículas compartilham a mesma composição de
+componentes, seus dados são alocados de maneira contígua na memória (em arrays
+densos). Essa organização otimiza a localidade de referência (tanto espacial
+quanto temporal) e maximiza o aproveitamento das linhas de \textit{cache} do
+processador, mitigando o gargalo de transferências esparsas de memória
+(\textit{cache misses}) --- um fator determinante para a viabilidade de
+simulações iterativas contendo milhares de partículas em tempo real.
 
 \subsubsection{Smoothing Kernel}
 
