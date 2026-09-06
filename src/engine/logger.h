@@ -40,16 +40,6 @@ inline std::mutex log_mutex;
 // -------------------- LEVEL CONTROL --------------------
 inline void setLevel(Level lvl) { CURRENT_LEVEL = lvl; }
 
-inline Level getLevel() { return CURRENT_LEVEL; }
-
-inline Level fromString(const std::string& s) {
-  if (s == "debug") return Level::Debug;
-  if (s == "info") return Level::Info;
-  if (s == "warn") return Level::Warn;
-  if (s == "error") return Level::Error;
-  return Level::Info;
-}
-
 // -------------------- COLORS --------------------
 
 namespace color {
@@ -185,29 +175,6 @@ void log(Level lvl, T&& first, Args&&... rest) {
   log_stream(lvl, std::forward<T>(first), std::forward<Args>(rest)...);
 }
 
-// -------------------- BOX LOGGER --------------------
-
-inline void log_box(Level lvl, const std::vector<std::string>& lines) {
-  if (lvl < CURRENT_LEVEL) return;
-
-  std::lock_guard<std::mutex> lock(log_mutex);
-
-  size_t width = 0;
-  for (const auto& line : lines) width = std::max(width, line.size());
-
-  print_prefix(lvl);
-  std::cout << "\n";
-
-  std::cout << "┌" << repeat("─", width + 2) << "┐\n";
-
-  for (const auto& line : lines) {
-    std::cout << "│ " << line << std::string(width - line.size(), ' ')
-              << " │\n";
-  }
-
-  std::cout << "└" << repeat("─", width + 2) << "┘" << "\n";
-}
-
 // -------------------- TABLE LOGGER --------------------
 
 inline void log_table(Level lvl, const std::string& title,
@@ -288,10 +255,6 @@ inline void log_table(Level lvl, const std::string& title,
 }
 
 // -------------------- GENERIC API --------------------
-
-inline void box(Level lvl, const std::vector<std::string>& lines) {
-  log_box(lvl, lines);
-}
 
 inline void table(Level lvl, const std::string& title,
                   const std::vector<std::string>& headers,

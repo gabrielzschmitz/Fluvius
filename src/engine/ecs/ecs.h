@@ -558,13 +558,3 @@ class ECS {
 };
 
 }  // namespace motrix::engine
-
-namespace std {
-template <>
-struct hash<motrix::engine::Entity> {
-  std::size_t operator()(const motrix::engine::Entity& e) const noexcept {
-    return std::hash<uint32_t>{}(e.index) ^
-           (std::hash<uint32_t>{}(e.version) << 1);
-  }
-};
-}  // namespace std

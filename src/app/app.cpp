@@ -117,12 +117,13 @@ static void InitApp(m_app::AppState& state, m_app::SceneType sceneType) {
   state.currentScene = sceneType;
 
   int num_cores = std::thread::hardware_concurrency();
-  if (num_cores == 0) num_cores = 8;
   m_eng::systems::InitThreads(num_cores, state.ecs);
 
   m_app::Scenes::Get(state.currentScene).init(state);
 
+#if defined(LOG_LEVEL_DEBUG)
   state.ecs.print_entities(logger::Level::Debug, {"Circle"});
+#endif
 }
 
 static void UpdateApp(m_app::AppState& state, float dt) {

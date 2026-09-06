@@ -152,7 +152,6 @@ class SparseSet {
    */
   T& get(Entity entity) {
     assert(contains(entity));
-    // Fast path: bypass ensure_page() since the entity is guaranteed to exist.
     const std::size_t page_index = entity >> PAGE_BITS;
     const std::size_t offset = entity & PAGE_MASK;
 
@@ -168,9 +167,6 @@ class SparseSet {
     const Entity index = pages_[page_index][offset];
     return components_[index];
   }
-
-  T& operator[](Entity entity) { return get(entity); }
-  const T& operator[](Entity entity) const { return get(entity); }
 
   /**
    * --------------------------------------------------------------------------
@@ -203,10 +199,6 @@ class SparseSet {
   [[nodiscard]] const std::vector<Entity>& entities() const {
     return dense_entities_;
   }
-
-  [[nodiscard]] std::vector<T>& data() { return components_; }
-
-  [[nodiscard]] const std::vector<T>& data() const { return components_; }
 
  private:
   /**
