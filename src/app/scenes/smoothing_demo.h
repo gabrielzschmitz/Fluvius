@@ -26,7 +26,7 @@ inline void CreateSmoothingDemo(ECS& ecs) {
   Entity e = ecs.create_entity();
   ecs.add<components::PositionComponent>(
     e, Vector2{CANVAS_W / 2.f, CANVAS_H / 2.f});
-  ecs.add<components::CircleComponent>(e, 6.f, 1.f, WHITE);
+  ecs.add<components::CircleComponent>(e, 6.f, WHITE);
   ecs.add<components::SmoothingParticleTag>(e);
   logger::info("[SMOOTHING] Created particle at center");
 }
@@ -58,60 +58,33 @@ inline void RenderSmoothing(ECS& ecs, const components::CameraComponent& cam) {
 
 }  // namespace motrix::engine::systems
 
-#include "app/scenes/smoothing_demo.h"
 #include "engine/components/ui.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
+#include "entities/ui.h"
 
 namespace motrix::entities {
 
 inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
-  engine::Entity window = ecs.create_entity();
+  engine::Entity window =
+    AddWindow(ecs, {20.f, 20.f}, 250.f, 200.f, "Smoothing Controls");
 
-  ecs.add<engine::components::UIWindowComponent>(
-    window, engine::components::UIWindowComponent{
-              {20.f, 20.f}, 250.f, 200.f, "Smoothing Controls"});
-  ecs.get<engine::components::UIWindowComponent>(window).auto_height = true;
-
-  engine::Entity radius_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    radius_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(radius_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    radius_slider,
-    engine::components::UISliderComponent{
-      "Radius", &motrix::engine::systems::smoothing_radius, 0.f, 175.f, 1.f,
-      [](float value) { smoothing_radius = value; }});
-  ecs.add<engine::components::UITooltipComponent>(
-    radius_slider, "Controls the influence radius around the particle.");
-
-  engine::Entity strength_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    strength_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(strength_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    strength_slider,
-    engine::components::UISliderComponent{
-      "Strength", &motrix::engine::systems::strength, 0.f, 255.f, 1.f,
-      [](float value) { motrix::engine::systems::strength = value; }});
-  ecs.add<engine::components::UITooltipComponent>(
-    strength_slider,
-    "Controls the strengh of influence from smoothing radius.");
-
-  engine::Entity size_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    size_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(size_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    size_slider,
-    engine::components::UISliderComponent{
-      "Size", &motrix::engine::systems::particle_size, 1.f, 50.f, 1.f,
-      [](float value) { particle_size = std::max(1.f, value); }});
-  ecs.add<engine::components::UITooltipComponent>(
-    size_slider, "Controls the particle size.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Radius",
+            &motrix::engine::systems::smoothing_radius, 0.f, 175.f, 1.f,
+            [](float value) {
+              motrix::engine::systems::smoothing_radius = value;
+            },
+            "Controls the influence radius around the particle.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Strength",
+            &motrix::engine::systems::strength, 0.f, 255.f, 1.f,
+            [](float value) { motrix::engine::systems::strength = value; },
+            "Controls the strengh of influence from smoothing radius.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Size",
+            &motrix::engine::systems::particle_size, 1.f, 50.f, 1.f,
+            [](float value) {
+              motrix::engine::systems::particle_size = std::max(1.f, value);
+            },
+            "Controls the particle size.");
 
   logger::info("[GUI] Created window '{}' (entity:{}:{})",
                ecs.get<engine::components::UIWindowComponent>(window).title,

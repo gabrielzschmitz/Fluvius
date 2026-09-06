@@ -18,7 +18,6 @@ struct UIWindowComponent {
   Vector2 position{20.f, 20.f};
   float width = 220.f;
   float height = 0.f;
-  bool auto_width = false;
   bool auto_height = true;
   float padding = 10.f;
   float gap = 8.f;
@@ -45,8 +44,6 @@ struct UILayoutChildComponent {
   Entity parent{0};
   float preferred_width = -1.f;  // -1 = stretch
   float preferred_height = 20.f;
-  float margin_top = 0.f;
-  float margin_bottom = 0.f;
 
   UILayoutChildComponent(Entity parent_entity = {}, float width = -1.f,
                          float height = 20.f)
@@ -91,42 +88,31 @@ struct UICheckboxComponent {
 
   std::string label;
   bool* value = nullptr;
-  float text_width;
   std::function<void(bool)> on_change;
 
   UICheckboxComponent(std::string text = {}, bool* bound = nullptr,
                       std::function<void(bool)> callback = {})
-    : label(std::move(text)),
-      value(bound),
-      on_change(std::move(callback)),
-      text_width(MeasureText(text.c_str(), 10 * uiScale) / uiScale) {}
+    : label(std::move(text)), value(bound), on_change(std::move(callback)) {}
 };
 
 struct UIButtonComponent {
   static constexpr std::string_view Name = "UIButton";
 
   std::string label;
-  bool clicked = false;
-  float text_width;
   std::function<void()> on_click;
 
-  UIButtonComponent(std::string text = {}, bool state = false,
+  UIButtonComponent(std::string text = {},
                     std::function<void()> callback = {})
-    : label(std::move(text)),
-      clicked(state),
-      on_click(std::move(callback)),
-      text_width(MeasureText(label.c_str(), 10 * uiScale) / uiScale) {}
+    : label(std::move(text)), on_click(std::move(callback)) {}
 };
 
 struct UITextComponent {
   static constexpr std::string_view Name = "UIText";
 
   std::string text;
-  float text_width;
 
   explicit UITextComponent(std::string value = {})
-    : text(std::move(value)),
-      text_width(MeasureText(text.c_str(), 10 * uiScale) / uiScale) {}
+    : text(std::move(value)) {}
 };
 
 struct UIDropdownComponent {
@@ -134,7 +120,6 @@ struct UIDropdownComponent {
 
   std::string label;
   std::vector<std::string> options;
-  std::vector<float> option_widths;
   int* selected_index = nullptr;
   bool expanded = false;
   std::function<void(const std::string&)> on_select;
@@ -145,21 +130,7 @@ struct UIDropdownComponent {
     : label(std::move(lbl)),
       options(std::move(opts)),
       selected_index(bound_index),
-      on_select(std::move(callback)) {
-    option_widths.reserve(options.size());
-    for (const auto& opt : options) {
-      std::string text = label + ": " + opt;
-      option_widths.push_back(MeasureText(text.c_str(), 10 * uiScale) /
-                              uiScale);
-    }
-  }
-
-  float SelectedWidth() const {
-    if (selected_index && *selected_index >= 0 &&
-        *selected_index < option_widths.size())
-      return option_widths[*selected_index];
-    return 0.f;
-  }
+      on_select(std::move(callback)) {}
 };
 
 struct UITooltipComponent {

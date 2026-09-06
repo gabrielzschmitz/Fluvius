@@ -23,16 +23,13 @@ struct CircleComponent {
   static constexpr std::string_view Name = "Circle";
 
   float radius = 4.f;
-  float particle_size = 1.f;
   Color color{255, 183, 222, 255};
   float density = 0.f;
   float pressure = 0.f;
 
-  CircleComponent(float radius_value = 4.f, float particle_size_value = 1.f,
+  CircleComponent(float radius_value = 4.f,
                   Color color_value = {255, 183, 222, 255})
-    : radius(radius_value),
-      particle_size(particle_size_value),
-      color(color_value) {}
+    : radius(radius_value), color(color_value) {}
 };
 
 }  // namespace motrix::engine::components

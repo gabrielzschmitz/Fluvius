@@ -35,9 +35,7 @@ inline Vector2 selection_center = {0.f, 0.f};
 inline bool selection_locked = false;
 inline engine::Entity selected_particle{};
 
-inline bool render_fluid_surface = false;
 inline bool render_fluid_filled = false;
-inline bool render_marching_squares = false;
 inline bool render_pressure_field = false;
 inline bool render_fluid_particles = true;
 inline bool render_particle_velocity = true;
@@ -73,6 +71,15 @@ inline const float path_point_spacing = 1.f;
 inline bool needs_reset = false;
 inline bool particle_cache_dirty = true;
 
+inline engine::Entity CreateParticleEntity(engine::ECS& ecs, Vector2 pos,
+                                           float radius, Color color) {
+  engine::Entity e = ecs.create_entity();
+  ecs.add<engine::components::PositionComponent>(e, pos);
+  ecs.add<engine::components::VelocityComponent>(e, Vector2{0.f, 0.f});
+  ecs.add<engine::components::CircleComponent>(e, radius, color);
+  return e;
+}
+
 inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
                         bool centered = false) {
   fluid_particles.clear();
@@ -101,11 +108,8 @@ inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
       for (int c = 0; c < cols && created < particle_count; ++c) {
         Vector2 pos{start_x + c * spacing, start_y + r * spacing};
 
-        engine::Entity e = ecs.create_entity();
-        ecs.add<engine::components::PositionComponent>(e, pos);
-        ecs.add<engine::components::VelocityComponent>(e, Vector2{0.f, 0.f});
-        ecs.add<engine::components::CircleComponent>(e, radius, radius,
-                                                     Color{85, 211, 241, 191});
+        engine::Entity e =
+          CreateParticleEntity(ecs, pos, radius, Color{85, 211, 241, 191});
 
         fluid_particles.push_back(e);
         placed_positions.push_back(pos);
@@ -139,11 +143,8 @@ inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
 
       if (!valid) continue;
 
-      engine::Entity e = ecs.create_entity();
-      ecs.add<engine::components::PositionComponent>(e, pos);
-      ecs.add<engine::components::VelocityComponent>(e, Vector2{0.f, 0.f});
-      ecs.add<engine::components::CircleComponent>(e, radius, radius,
-                                                   Color{85, 211, 241, 191});
+      engine::Entity e =
+        CreateParticleEntity(ecs, pos, radius, Color{85, 211, 241, 191});
 
       fluid_particles.push_back(e);
       placed_positions.push_back(pos);

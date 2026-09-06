@@ -20,7 +20,18 @@ inline engine::Entity CreateCanvas(
 inline engine::Entity CreateCanvasWithHandles(engine::ECS& ecs,
                                                bool show_handles) {
   return CreateCanvas(ecs, {CANVAS_W / 2.f, CANVAS_H / 2.f},
-                     {CANVAS_W, CANVAS_H}, 0.f, show_handles);
+                      {CANVAS_W, CANVAS_H}, 0.f, show_handles);
+}
+
+// Reset every canvas back to its default centered, unrotated state.
+inline void ResetCanvasTransform(engine::ECS& ecs) {
+  ecs.group_view<engine::components::CanvasComponent>(
+    [&](engine::Entity, engine::components::CanvasComponent& canvas) {
+      canvas.position = {CANVAS_W / 2.f, CANVAS_H / 2.f};
+      canvas.size = {CANVAS_W, CANVAS_H};
+      canvas.rotation = 0.f;
+      canvas.half_extents = {CANVAS_W / 2.f, CANVAS_H / 2.f};
+    });
 }
 
 }  // namespace motrix::entities

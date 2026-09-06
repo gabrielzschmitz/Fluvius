@@ -31,18 +31,6 @@ inline float grid_arrow_radius = 6.0f;
 inline int pending_columns = -1;
 inline int pending_rows = -1;
 
-inline float DensityPoly6Kernel(float r2, float h) {
-  float h2 = h * h;
-
-  if (r2 > h2) return 0.0f;
-
-  float diff = h2 - r2;
-
-  float coeff = 315.0f / (64.0f * PI * pow(h, 9));
-
-  return coeff * pow(diff, 3);
-}
-
 inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
   ecs.group_view<components::DensityParticleTag>(
     [&](Entity entity, components::DensityParticleTag&) {
@@ -59,7 +47,7 @@ inline void CreateDensityDemo(ECS& ecs, int cols, int rows) {
 
       Entity e = ecs.create_entity();
       ecs.add<components::PositionComponent>(e, Vector2{x, y});
-      ecs.add<components::CircleComponent>(e, grid_particle_size, 1.f, GRAY);
+      ecs.add<components::CircleComponent>(e, grid_particle_size, GRAY);
       ecs.add<components::DensityParticleTag>(e);
     }
   }
@@ -96,7 +84,7 @@ inline void RenderDensityDemo(ECS& ecs,
       float dist = sqrtf(r2);
 
       if (dist > 1.0f && r2 <= h2) {
-        float kernelVal = DensityPoly6Kernel(r2, h);
+        float kernelVal = Poly6Kernel(r2, h);
         float contribution = m * kernelVal;
         contributions.push_back({pos.position, contribution});
       }
@@ -137,7 +125,7 @@ inline void RenderDensityDemo(ECS& ecs,
       Color particleColor;
 
       if (r2 <= h2 && dist > 1.0f) {
-        float kernelVal = DensityPoly6Kernel(r2, h);
+        float kernelVal = Poly6Kernel(r2, h);
         float contribution = m * kernelVal;
         float intensity =
           (maxContribution > 0.0f) ? (contribution / maxContribution) : 0.0f;
@@ -154,7 +142,7 @@ inline void RenderDensityDemo(ECS& ecs,
       DrawCircleV(pos.position, radius, particleColor);
 
       if (r2 <= h2 && dist > 1.0f) {
-        float kernelVal = DensityPoly6Kernel(r2, h);
+        float kernelVal = Poly6Kernel(r2, h);
         float contribution = m * kernelVal;
         float fraction =
           (totalDensity > 0.0f) ? (contribution / totalDensity) * 100.0f : 0.0f;
@@ -183,115 +171,48 @@ inline void RenderDensityDemo(ECS& ecs,
 
 }  // namespace motrix::engine::systems
 
-#include "app/scenes/density_demo.h"
 #include "engine/components/ui.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
+#include "entities/ui.h"
 
 namespace motrix::entities {
 
 inline void CreateDensityDemoUI(engine::ECS& ecs) {
-  engine::Entity window = ecs.create_entity();
+  engine::Entity window =
+    AddWindow(ecs, {20.f, 20.f}, 250.f, 250.f, "Density Controls");
 
-  ecs.add<engine::components::UIWindowComponent>(
-    window, engine::components::UIWindowComponent{
-              {20.f, 20.f}, 250.f, 250.f, "Density Controls"});
-  ecs.get<engine::components::UIWindowComponent>(window).auto_height = true;
-
-  engine::Entity count_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    count_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(count_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    count_slider,
-    engine::components::UISliderComponent{
-      "Columns", &motrix::engine::systems::grid_columns_float, 2.f, 50.f, 1.f,
-      [](float value) {
-        motrix::engine::systems::grid_columns = static_cast<int>(value);
-        motrix::engine::systems::grid_columns_float = value;
-        motrix::engine::systems::pending_columns = static_cast<int>(value);
-      }});
-  ecs.add<engine::components::UITooltipComponent>(
-    count_slider, "Number of columns in the grid.");
-
-  engine::Entity rows_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    rows_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(rows_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    rows_slider,
-    engine::components::UISliderComponent{
-      "Rows", &motrix::engine::systems::grid_rows_float, 2.f, 20.f, 1.f,
-      [](float value) {
-        motrix::engine::systems::grid_rows = static_cast<int>(value);
-        motrix::engine::systems::grid_rows_float = value;
-        motrix::engine::systems::pending_rows = static_cast<int>(value);
-      }});
-  ecs.add<engine::components::UITooltipComponent>(
-    rows_slider, "Number of rows in the grid.");
-
-  engine::Entity radius_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    radius_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(radius_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    radius_slider, engine::components::UISliderComponent{
-                     "Radius", &motrix::engine::systems::grid_smoothing_radius,
-                     0.f, 320.f, 1.f, nullptr});
-  ecs.add<engine::components::UITooltipComponent>(
-    radius_slider, "Smoothing radius around center particle.");
-
-  engine::Entity font_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    font_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(font_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    font_slider, engine::components::UISliderComponent{
-                   "Font Size", &motrix::engine::systems::grid_font_size, 6.f,
-                   20.f, 1.f, nullptr});
-  ecs.add<engine::components::UITooltipComponent>(font_slider,
-                                                  "Text font size.");
-
-  engine::Entity mass_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    mass_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(mass_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    mass_slider, engine::components::UISliderComponent{
-                   "Mass", &motrix::engine::systems::grid_particle_mass, 100.f,
-                   10000.f, 100.f, nullptr});
-  ecs.add<engine::components::UITooltipComponent>(
-    mass_slider, "Particle mass for density calculation.");
-
-  engine::Entity size_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    size_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(size_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    size_slider,
-    engine::components::UISliderComponent{
-      "Particle Size", &motrix::engine::systems::grid_particle_size, 2.f, 15.f,
-      0.5f, nullptr});
-  ecs.add<engine::components::UITooltipComponent>(size_slider,
-                                                  "Particle circle radius.");
-
-  engine::Entity arrow_slider = ecs.create_entity();
-  ecs.add<engine::components::UILayoutChildComponent>(
-    arrow_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<engine::components::UIResolvedRectComponent>(arrow_slider);
-  ecs.add<engine::components::UISliderComponent>(
-    arrow_slider, engine::components::UISliderComponent{
-                    "Arrow Radius", &motrix::engine::systems::grid_arrow_radius,
-                    0.f, 20.f, 0.5f, nullptr});
-  ecs.add<engine::components::UITooltipComponent>(
-    arrow_slider, "Arrow start radius from particle center.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Columns",
+            &motrix::engine::systems::grid_columns_float, 2.f, 50.f, 1.f,
+            [](float value) {
+              motrix::engine::systems::grid_columns = static_cast<int>(value);
+              motrix::engine::systems::grid_columns_float = value;
+              motrix::engine::systems::pending_columns = static_cast<int>(value);
+            },
+            "Number of columns in the grid.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Rows",
+            &motrix::engine::systems::grid_rows_float, 2.f, 20.f, 1.f,
+            [](float value) {
+              motrix::engine::systems::grid_rows = static_cast<int>(value);
+              motrix::engine::systems::grid_rows_float = value;
+              motrix::engine::systems::pending_rows = static_cast<int>(value);
+            },
+            "Number of rows in the grid.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Radius",
+            &motrix::engine::systems::grid_smoothing_radius, 0.f, 320.f, 1.f,
+            nullptr, "Smoothing radius around center particle.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Font Size",
+            &motrix::engine::systems::grid_font_size, 6.f, 20.f, 1.f, nullptr,
+            "Text font size.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Mass",
+            &motrix::engine::systems::grid_particle_mass, 100.f, 10000.f, 100.f,
+            nullptr, "Particle mass for density calculation.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Particle Size",
+            &motrix::engine::systems::grid_particle_size, 2.f, 15.f, 0.5f,
+            nullptr, "Particle circle radius.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Arrow Radius",
+            &motrix::engine::systems::grid_arrow_radius, 0.f, 20.f, 0.5f,
+            nullptr, "Arrow start radius from particle center.");
 }
 
 }  // namespace motrix::entities

@@ -12,6 +12,7 @@
 #include "entities/camera.h"
 #include "entities/canvas.h"
 #include "entities/fluid.h"
+#include "entities/ui.h"
 
 namespace {
 
@@ -29,14 +30,7 @@ inline void ResetPressureDemo(motrix::engine::ECS& ecs) {
   render_fluid_particles = true;
   render_particle_velocity = true;
 
-  ecs.group_view<components::CanvasComponent>(
-    [&](Entity, components::CanvasComponent& canvas) {
-      canvas.position = {CANVAS_W / 2.f, CANVAS_H / 2.f};
-      canvas.size = {CANVAS_W, CANVAS_H};
-      canvas.rotation = 0.f;
-      canvas.half_extents = {CANVAS_W / 2.f, CANVAS_H / 2.f};
-      canvas.rotation_dirty = true;
-    });
+  motrix::entities::ResetCanvasTransform(ecs);
 
   ecs.group_view<components::CircleComponent>(
     [&](Entity e, components::CircleComponent& circ) {
@@ -57,111 +51,31 @@ inline void ResetPressureDemo(motrix::engine::ECS& ecs) {
 }
 
 inline void CreatePressureDemoUI(motrix::engine::ECS& ecs) {
-  Entity window = ecs.create_entity();
-  ecs.add<components::UIWindowComponent>(
-    window,
-    components::UIWindowComponent{{20.f, 20.f}, 220.f, 160.f, "Pressure Demo"});
-  ecs.get<components::UIWindowComponent>(window).auto_height = true;
+  Entity window = AddWindow(ecs, {20.f, 20.f}, 220.f, 160.f, "Pressure Demo");
 
-  Entity smoothing_slider = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    smoothing_slider, components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<components::UIResolvedRectComponent>(smoothing_slider);
-  ecs.add<components::UISliderComponent>(
-    smoothing_slider,
-    components::UISliderComponent("Smoothing", &smoothing_radius, 10.f, 100.f,
-                                  1.f, nullptr));
-  ecs.add<components::UITooltipComponent>(smoothing_slider,
-                                          "Smoothing radius (h).");
+  AddSlider(ecs, window, INVALID_ENTITY, "Smoothing", &smoothing_radius, 10.f,
+            100.f, 1.f, nullptr, "Smoothing radius (h).");
+  AddSlider(ecs, window, INVALID_ENTITY, "Target Density", &target_density,
+            0.0001f, 0.001f, 0.00001f, nullptr, "Target fluid density.");
+  AddSlider(ecs, window, INVALID_ENTITY, "Pressure", &pressure_multiplier, 50.f,
+            500.f, 1.f, nullptr, "Pressure multiplier.");
+  AddSlider(ecs, window, INVALID_ENTITY, "Size", &particle_size, 1.f, 10.f,
+            0.1f, nullptr, "Particle size.");
+  AddSlider(ecs, window, INVALID_ENTITY, "Speed", &sim_speed, 0.1f, 10.f, 0.1f,
+            nullptr, "Simulation speed.");
 
-  Entity target_density_slider = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    target_density_slider,
-    components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<components::UIResolvedRectComponent>(target_density_slider);
-  ecs.add<components::UISliderComponent>(
-    target_density_slider,
-    components::UISliderComponent("Target Density", &target_density, 0.0001f,
-                                  0.001f, 0.00001f, nullptr));
-  ecs.add<components::UITooltipComponent>(target_density_slider,
-                                          "Target fluid density.");
-
-  Entity pressure_slider = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    pressure_slider, components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<components::UIResolvedRectComponent>(pressure_slider);
-  ecs.add<components::UISliderComponent>(
-    pressure_slider,
-    components::UISliderComponent("Pressure", &pressure_multiplier, 50.f, 500.f,
-                                  1.f, nullptr));
-  ecs.add<components::UITooltipComponent>(pressure_slider,
-                                          "Pressure multiplier.");
-
-  Entity size_slider = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    size_slider, components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<components::UIResolvedRectComponent>(size_slider);
-  ecs.add<components::UISliderComponent>(
-    size_slider, components::UISliderComponent("Size", &particle_size, 1.f,
-                                               10.f, 0.1f, nullptr));
-  ecs.add<components::UITooltipComponent>(size_slider, "Particle size.");
-
-  Entity speed_slider = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    speed_slider, components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<components::UIResolvedRectComponent>(speed_slider);
-  ecs.add<components::UISliderComponent>(
-    speed_slider, components::UISliderComponent("Speed", &sim_speed, 0.1f, 10.f,
-                                                0.1f, nullptr));
-  ecs.add<components::UITooltipComponent>(speed_slider, "Simulation speed.");
-
-  Entity pause_checkbox = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    pause_checkbox, components::UILayoutChildComponent{window, -1.f, 25.f});
-  ecs.add<components::UIResolvedRectComponent>(pause_checkbox);
-  ecs.add<components::UICheckboxComponent>(
-    pause_checkbox, components::UICheckboxComponent("Pause", &is_paused));
-  ecs.add<components::UITooltipComponent>(pause_checkbox, "Pause simulation.");
-
-  Entity reset_button = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    reset_button, components::UILayoutChildComponent{window, -1.f, 25.f});
-  ecs.add<components::UIResolvedRectComponent>(reset_button);
-  ecs.add<components::UIButtonComponent>(
-    reset_button, components::UIButtonComponent{
-                    "Reset", false, [&ecs]() { ResetPressureDemo(ecs); }});
-  ecs.add<components::UITooltipComponent>(reset_button,
-                                          "Reset to default values.");
-
-  Entity pf_checkbox = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    pf_checkbox, components::UILayoutChildComponent{window, -1.f, 25.f});
-  ecs.add<components::UIResolvedRectComponent>(pf_checkbox);
-  ecs.add<components::UICheckboxComponent>(
-    pf_checkbox,
-    components::UICheckboxComponent("Pressure Field", &render_pressure_field));
-  ecs.add<components::UITooltipComponent>(pf_checkbox,
-                                          "Render pressure field.");
-
-  Entity particles_checkbox = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    particles_checkbox, components::UILayoutChildComponent{window, -1.f, 25.f});
-  ecs.add<components::UIResolvedRectComponent>(particles_checkbox);
-  ecs.add<components::UICheckboxComponent>(
-    particles_checkbox,
-    components::UICheckboxComponent("Particles", &render_fluid_particles));
-  ecs.add<components::UITooltipComponent>(particles_checkbox,
-                                          "Render fluid particles.");
-
-  Entity velocity_checkbox = ecs.create_entity();
-  ecs.add<components::UILayoutChildComponent>(
-    velocity_checkbox, components::UILayoutChildComponent{window, -1.f, 25.f});
-  ecs.add<components::UIResolvedRectComponent>(velocity_checkbox);
-  ecs.add<components::UICheckboxComponent>(
-    velocity_checkbox, components::UICheckboxComponent(
-                         "Velocity Vectors", &render_particle_velocity));
-  ecs.add<components::UITooltipComponent>(velocity_checkbox,
-                                          "Render velocity vectors.");
+  AddCheckbox(ecs, window, INVALID_ENTITY, "Pause", &is_paused, {}, {}, 0.f,
+              25.f);
+  AddButton(ecs, window, INVALID_ENTITY, "Reset",
+            [&ecs]() { ResetPressureDemo(ecs); }, "Reset to default values.",
+            -1.f, 25.f);
+  AddCheckbox(ecs, window, INVALID_ENTITY, "Pressure Field",
+              &render_pressure_field, {}, "Render pressure field.", 0.f, 25.f);
+  AddCheckbox(ecs, window, INVALID_ENTITY, "Particles", &render_fluid_particles,
+              {}, "Render fluid particles.", 0.f, 25.f);
+  AddCheckbox(ecs, window, INVALID_ENTITY, "Velocity Vectors",
+              &render_particle_velocity, {}, "Render velocity vectors.", 0.f,
+              25.f);
 }
 
 }  // anonymous namespace

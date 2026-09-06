@@ -11,6 +11,7 @@
 #include "engine/systems/physics.h"
 #include "entities/camera.h"
 #include "entities/canvas.h"
+#include "entities/ui.h"
 
 namespace motrix::app {
 
@@ -34,27 +35,9 @@ inline std::vector<float> visc_pressures;
 inline std::vector<Vector2> visc_pressure_forces;
 inline std::vector<Vector2> visc_viscosity_forces;
 
-struct ViscGridCell {
-  int x, y;
-  bool operator==(const ViscGridCell& o) const { return x == o.x && y == o.y; }
-};
-
-struct ViscGridCellHash {
-  size_t operator()(const ViscGridCell& c) const {
-    return std::hash<int>()(c.x * 73856093) ^ std::hash<int>()(c.y * 19349663);
-  }
-};
-
-inline std::unordered_map<ViscGridCell, std::vector<size_t>, ViscGridCellHash>
+inline std::unordered_map<m_eng::systems::GridCell, std::vector<size_t>,
+                          m_eng::systems::GridCellHash>
   visc_spatial_grid;
-
-inline float ViscPoly6Kernel(float r2, float h) {
-  float h2 = h * h;
-  if (r2 >= h2) return 0.f;
-  float diff = h2 - r2;
-  float h9 = h * h * h * h * h * h * h * h * h;
-  return 315.f / (64.f * 3.14159f * h9) * diff * diff * diff;
-}
 
 inline float ViscSpikyKernelGradient(float r, float h) {
   if (r <= 0.f || r >= h) return 0.f;
@@ -108,7 +91,7 @@ inline void SimulateViscSide(m_eng::ECS& ecs, float dt, float viscosity,
   for (size_t i = 0; i < n; ++i) {
     int cell_x = static_cast<int>(visc_positions[i].x / h);
     int cell_y = static_cast<int>(visc_positions[i].y / h);
-    ViscGridCell cell{cell_x, cell_y};
+    m_eng::systems::GridCell cell{cell_x, cell_y};
     visc_spatial_grid[cell].push_back(i);
   }
 
@@ -119,14 +102,14 @@ inline void SimulateViscSide(m_eng::ECS& ecs, float dt, float viscosity,
 
     for (int dx = -1; dx <= 1; ++dx) {
       for (int dy = -1; dy <= 1; ++dy) {
-        ViscGridCell cell{cell_x + dx, cell_y + dy};
+        m_eng::systems::GridCell cell{cell_x + dx, cell_y + dy};
         auto it = visc_spatial_grid.find(cell);
         if (it == visc_spatial_grid.end()) continue;
         for (size_t idx : it->second) {
           float dxp = visc_positions[idx].x - visc_positions[i].x;
           float dyp = visc_positions[idx].y - visc_positions[i].y;
           float r2 = dxp * dxp + dyp * dyp;
-          rho += mass * ViscPoly6Kernel(r2, h);
+          rho += mass * m_eng::systems::Poly6Kernel(r2, h);
         }
       }
     }
@@ -146,7 +129,7 @@ inline void SimulateViscSide(m_eng::ECS& ecs, float dt, float viscosity,
 
     for (int dx = -1; dx <= 1; ++dx) {
       for (int dy = -1; dy <= 1; ++dy) {
-        ViscGridCell cell{cell_x + dx, cell_y + dy};
+        m_eng::systems::GridCell cell{cell_x + dx, cell_y + dy};
         auto it = visc_spatial_grid.find(cell);
         if (it == visc_spatial_grid.end()) continue;
 
@@ -266,7 +249,7 @@ inline void ResetViscosityDemo(m_eng::ECS& ecs) {
     m_eng::Entity e_left = ecs.create_entity();
     ecs.add<m_eng::components::PositionComponent>(e_left, Vector2{x, y});
     ecs.add<m_eng::components::VelocityComponent>(e_left, Vector2{0.f, 0.f});
-    ecs.add<m_eng::components::CircleComponent>(e_left, 4.f, 4.f,
+    ecs.add<m_eng::components::CircleComponent>(e_left, 4.f,
                                                 Color{85, 211, 241, 191});
     leftParticles[leftParticleCount++] = e_left;
 
@@ -274,7 +257,7 @@ inline void ResetViscosityDemo(m_eng::ECS& ecs) {
     ecs.add<m_eng::components::PositionComponent>(e_right,
                                                   Vector2{x + halfW, y});
     ecs.add<m_eng::components::VelocityComponent>(e_right, Vector2{0.f, 0.f});
-    ecs.add<m_eng::components::CircleComponent>(e_right, 4.f, 4.f,
+    ecs.add<m_eng::components::CircleComponent>(e_right, 4.f,
                                                 Color{85, 211, 241, 191});
     rightParticles[rightParticleCount++] = e_right;
   }
@@ -283,23 +266,11 @@ inline void ResetViscosityDemo(m_eng::ECS& ecs) {
 }
 
 inline void CreateViscosityDemoUI(m_eng::ECS& ecs) {
-  m_eng::Entity window = ecs.create_entity();
-  ecs.add<m_eng::components::UIWindowComponent>(
-    window, m_eng::components::UIWindowComponent{
-              {20.f, 20.f}, 250.f, 100.f, "Viscosity Demo Controls"});
-  ecs.get<m_eng::components::UIWindowComponent>(window).auto_height = true;
-
-  m_eng::Entity count_slider = ecs.create_entity();
-  ecs.add<m_eng::components::UILayoutChildComponent>(
-    count_slider,
-    m_eng::components::UILayoutChildComponent{window, -1.f, 30.f});
-  ecs.add<m_eng::components::UIResolvedRectComponent>(count_slider);
-  ecs.add<m_eng::components::UISliderComponent>(
-    count_slider,
-    m_eng::components::UISliderComponent{
-      "Particles", &viscosity_particles_float, 50.f, 500.f, 10.f, nullptr});
-  ecs.add<m_eng::components::UITooltipComponent>(
-    count_slider, "Number of particles on each side.");
+  m_eng::Entity window = m_ett::AddWindow(ecs, {20.f, 20.f}, 250.f, 100.f,
+                                          "Viscosity Demo Controls");
+  m_ett::AddSlider(ecs, window, m_eng::INVALID_ENTITY, "Particles",
+                   &viscosity_particles_float, 50.f, 500.f, 10.f, nullptr,
+                   "Number of particles on each side.");
 }
 
 inline void InitViscosityDemo(AppState& state) {
@@ -370,9 +341,6 @@ inline void RenderViscosityDemo(AppState& state) {
     });
 
   float halfW = CANVAS_W / 2.f;
-  float halfH = CANVAS_H / 2.f;
-  float margin = 50.f;
-  float labelY = -halfH + margin;
 
   DrawLineEx(Vector2{halfW, 0}, Vector2{halfW, CANVAS_H}, 3.f, LIGHTGRAY);
   EndMode2D();

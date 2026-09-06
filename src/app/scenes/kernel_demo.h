@@ -29,7 +29,7 @@ inline void CreateKernelDemo(ECS& ecs, size_t particle_count = 100) {
     Entity e = ecs.create_entity();
     ecs.add<components::PositionComponent>(e, Vector2{x, y});
     ecs.add<components::CircleComponent>(
-      e, 4.f, 1.f,
+      e, 4.f,
       Color{static_cast<unsigned char>(100 + rand() % 155),
             static_cast<unsigned char>(100 + rand() % 155),
             static_cast<unsigned char>(200 + rand() % 55), 255});
@@ -112,39 +112,22 @@ inline void RenderKernel(ECS& ecs, const components::CameraComponent& cam) {
 
 }  // namespace motrix::engine::systems
 
-#include "app/scenes/kernel_demo.h"
 #include "engine/components/ui.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
+#include "entities/ui.h"
 
 namespace motrix::entities {
 
 inline void CreateKernelDemoUI(engine::ECS& ecs) {
-  engine::Entity window = ecs.create_entity();
+  engine::Entity window =
+    AddWindow(ecs, {20.f, CANVAS_H * uiScale / 2.f + 20.f}, 250.f, 70.f,
+              "Kernel Demo Controls");
 
-  ecs.add<engine::components::UIWindowComponent>(
-    window, engine::components::UIWindowComponent{
-              {20.f, CANVAS_H * uiScale / 2.f + 20.f},
-              250.f,
-              70.f,
-              "Kernel Demo Controls"});
-  ecs.get<engine::components::UIWindowComponent>(window).auto_height = true;
-
-  engine::Entity blur_slider = ecs.create_entity();
-
-  ecs.add<engine::components::UILayoutChildComponent>(
-    blur_slider,
-    engine::components::UILayoutChildComponent{window, -1.f, 30.f});
-
-  ecs.add<engine::components::UIResolvedRectComponent>(blur_slider);
-
-  ecs.add<engine::components::UISliderComponent>(
-    blur_slider,
-    engine::components::UISliderComponent{
-      "Blur", &motrix::engine::systems::blur_intensity, 0.f, 1.f, 0.01f,
-      [](float value) { motrix::engine::systems::blur_intensity = value; }});
-  ecs.add<engine::components::UITooltipComponent>(
-    blur_slider, "Controls the blur intensity on the right side.");
+  AddSlider(ecs, window, engine::INVALID_ENTITY, "Blur",
+            &motrix::engine::systems::blur_intensity, 0.f, 1.f, 0.01f,
+            [](float value) { motrix::engine::systems::blur_intensity = value; },
+            "Controls the blur intensity on the right side.");
 }
 
 }  // namespace motrix::entities
