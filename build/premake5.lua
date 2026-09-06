@@ -481,6 +481,7 @@ if not _OPTIONS["with-emscripten"] then
 	language("C++")
 	location("build_files/")
 	targetdir("../bin/%{cfg.buildcfg}")
+	cppdialect("C++17")
 
 	files({ "../src/bench/**.cpp", "../src/bench/**.h" })
 
