@@ -1,8 +1,6 @@
 // entities/camera.h
 #pragma once
 
-#include <vector>
-
 #include "../engine/components/camera.h"
 #include "../engine/ecs/ecs.h"
 #include "../engine/globals.h"
@@ -23,8 +21,6 @@ namespace motrix::entities {
  * ============================================================================
  */
 
-inline std::vector<engine::Entity> cameras;
-
 inline engine::Entity CreateCamera(engine::ECS& ecs) {
   engine::Entity e = ecs.create_entity();
 
@@ -42,7 +38,6 @@ inline engine::Entity CreateCamera(engine::ECS& ecs) {
 
   ecs.add<engine::components::CameraComponent>(e, cam);
 
-  cameras.push_back(e);
   return e;
 }
 

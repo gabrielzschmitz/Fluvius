@@ -16,10 +16,7 @@ struct CanvasComponent {
   float rotation{0.f};
   Vector2 half_extents{CANVAS_W / 2.f, CANVAS_H / 2.f};
 
-  Vector2 prev_position{CANVAS_W / 2.f, CANVAS_H / 2.f};
   float prev_rotation{0.f};
-
-  bool rotation_dirty = true;
 
   float initial_mouse_angle = 0.f;
 
@@ -40,9 +37,7 @@ explicit CanvasComponent(Vector2 pos, Vector2 dim, float rot = 0.f)
       size(dim),
       rotation(rot),
       half_extents{dim.x / 2.f, dim.y / 2.f},
-      prev_position(pos),
       prev_rotation(rot),
-      rotation_dirty(true),
       show_handles(true) {}
 };
 

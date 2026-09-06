@@ -54,11 +54,6 @@ inline void UpdateCanvasInteraction(ECS& ecs,
 
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
-      canvas.prev_position = canvas.position;
-    });
-
-  ecs.group_view<components::CanvasComponent>(
-    [&](Entity, components::CanvasComponent& canvas) {
       Vector2 local_mouse = WorldToCanvasLocal(mouse_world, canvas);
 
       bool touching_left =
@@ -129,7 +124,6 @@ inline void UpdateCanvasInteraction(ECS& ecs,
 
           if (std::abs(delta_angle) > 0.001f) {
             canvas.rotation = canvas.prev_rotation + delta_angle;
-            canvas.rotation_dirty = true;
           }
         }
       }

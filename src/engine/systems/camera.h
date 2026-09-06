@@ -2,6 +2,7 @@
 #pragma once
 
 #include "../components/camera.h"
+#include "../components/canvas.h"
 #include "../components/ui.h"
 #include "../ecs/ecs.h"
 #include "../globals.h"
@@ -43,7 +44,6 @@ inline void UpdateCamera2D(engine::ECS& ecs) {
             canvas.size = {CANVAS_W, CANVAS_H};
             canvas.rotation = 0.f;
             canvas.half_extents = {CANVAS_W / 2.f, CANVAS_H / 2.f};
-            canvas.rotation_dirty = true;
           });
       }
 
