@@ -8,6 +8,7 @@
 #include "engine/globals.h"
 #include "engine/systems/camera.h"
 #include "engine/systems/canvas.h"
+#include "engine/systems/fluid_render.h"
 #include "engine/systems/physics.h"
 #include "entities/camera.h"
 #include "entities/canvas.h"
@@ -39,14 +40,17 @@ inline std::unordered_map<m_eng::systems::GridCell, std::vector<size_t>,
                           m_eng::systems::GridCellHash>
   visc_spatial_grid;
 
-inline float ViscSpikyKernelGradient(float r, float h) {
+// Demo-specific SPH kernels. These deliberately use different tuning than the
+// canonical kernels in engine/systems/sph_kernels.h (3x factor and h3/h5
+// normalization) to make the viscosity contrast visually obvious.
+inline float DemoSpikyKernelGradient(float r, float h) {
   if (r <= 0.f || r >= h) return 0.f;
   float h5 = h * h * h * h * h;
   float v = h - r;
   return -45.f / (3.14159f * h5) * v * v;
 }
 
-inline float ViscViscosityKernel(float r, float h) {
+inline float DemoViscosityKernel(float r, float h) {
   if (r >= h) return 0.f;
   float h3 = h * h * h;
   return 45.f / (3.14159f * h3) * (h - r);
@@ -143,7 +147,7 @@ inline void SimulateViscSide(m_eng::ECS& ecs, float dt, float viscosity,
           float r = sqrtf(r2);
           Vector2 dir{dxp / r, dyp / r};
 
-          float grad = ViscSpikyKernelGradient(r, h);
+          float grad = DemoSpikyKernelGradient(r, h);
 
           float rho_j = visc_densities[j];
           if (rho_j < 0.0001f) continue;
@@ -157,7 +161,7 @@ inline void SimulateViscSide(m_eng::ECS& ecs, float dt, float viscosity,
           visc_pressure_forces[i].x += dir.x * factor;
           visc_pressure_forces[i].y += dir.y * factor;
 
-          float vk = ViscViscosityKernel(r, h);
+          float vk = DemoViscosityKernel(r, h);
           float dvx = visc_velocities[j].x - visc_velocities[i].x;
           float dvy = visc_velocities[j].y - visc_velocities[i].y;
           visc_viscosity_forces[i].x += dvx * vk;

@@ -7,6 +7,7 @@
 #include "../ecs/ecs.h"
 #include "../globals.h"
 #include "../systems/ui_helpers.h"
+#include "../../entities/canvas.h"
 #include "raylib.h"
 
 namespace motrix::engine::systems {
@@ -38,13 +39,7 @@ inline void UpdateCamera2D(engine::ECS& ecs) {
           std::min(window_width / (float)CANVAS_W, window_height / (float)CANVAS_H);
         cam.camera.offset = {window_width * 0.5f, window_height * 0.5f};
 
-        ecs.group_view<components::CanvasComponent>(
-          [&](Entity, components::CanvasComponent& canvas) {
-            canvas.position = {CANVAS_W / 2.f, CANVAS_H / 2.f};
-            canvas.size = {CANVAS_W, CANVAS_H};
-            canvas.rotation = 0.f;
-            canvas.half_extents = {CANVAS_W / 2.f, CANVAS_H / 2.f};
-          });
+        motrix::entities::ResetCanvasTransform(ecs);
       }
 
       cam.camera.offset = {window_width * 0.5f, window_height * 0.5f};

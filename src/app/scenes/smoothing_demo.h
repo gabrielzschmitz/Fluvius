@@ -2,25 +2,18 @@
 #pragma once
 
 #include "engine/components/camera.h"
+#include "engine/components/demo_tags.h"
 #include "engine/components/physics.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
 #include "engine/systems/canvas.h"
 #include "raylib.h"
 
-namespace motrix::engine::components {
-
-struct SmoothingParticleTag {
-  static constexpr std::string_view Name = "SmoothingParticle";
-};
-
-}  // namespace motrix::engine::components
-
 namespace motrix::engine::systems {
 
-inline float smoothing_radius = 160.f;
+inline float demo_smoothing_radius = 160.f;
 inline float strength = 50.f;
-inline float particle_size = 8.f;
+inline float demo_particle_size = 8.f;
 
 inline void CreateSmoothingDemo(ECS& ecs) {
   Entity e = ecs.create_entity();
@@ -39,18 +32,18 @@ inline void RenderSmoothing(ECS& ecs, const components::CameraComponent& cam) {
     [&](Entity, components::SmoothingParticleTag&,
         components::PositionComponent& pos, components::CircleComponent& circ) {
       float line_width = 2.f;
-      DrawCircleV(pos.position, smoothing_radius + line_width,
+      DrawCircleV(pos.position, demo_smoothing_radius + line_width,
                   Color{255, 255, 255, 255});
-      DrawCircleV(pos.position, smoothing_radius, canvas_background_color());
+      DrawCircleV(pos.position, demo_smoothing_radius, canvas_background_color());
       DrawCircleGradient(
-        pos.position, smoothing_radius, Color{1, 64, 126, 255},
+        pos.position, demo_smoothing_radius, Color{1, 64, 126, 255},
         Color{1, 64, 126, static_cast<unsigned char>(strength)});
-      Vector2 edge_pos{pos.position.x + smoothing_radius, pos.position.y};
+      Vector2 edge_pos{pos.position.x + demo_smoothing_radius, pos.position.y};
       DrawLineEx(pos.position, edge_pos, line_width, Color{255, 255, 255, 255});
-      Vector2 label_pos{pos.position.x + smoothing_radius / 2.f,
+      Vector2 label_pos{pos.position.x + demo_smoothing_radius / 2.f,
                         pos.position.y - 23.f};
       DrawText("h", label_pos.x, label_pos.y, 24.f, Color{255, 255, 255, 255});
-      DrawCircleV(pos.position, particle_size, circ.color);
+      DrawCircleV(pos.position, demo_particle_size, circ.color);
     });
 
   EndMode2D();
@@ -70,9 +63,9 @@ inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
     AddWindow(ecs, {20.f, 20.f}, 250.f, 200.f, "Smoothing Controls");
 
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Radius",
-            &motrix::engine::systems::smoothing_radius, 0.f, 175.f, 1.f,
+            &motrix::engine::systems::demo_smoothing_radius, 0.f, 175.f, 1.f,
             [](float value) {
-              motrix::engine::systems::smoothing_radius = value;
+              motrix::engine::systems::demo_smoothing_radius = value;
             },
             "Controls the influence radius around the particle.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Strength",
@@ -80,9 +73,9 @@ inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
             [](float value) { motrix::engine::systems::strength = value; },
             "Controls the strengh of influence from smoothing radius.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Size",
-            &motrix::engine::systems::particle_size, 1.f, 50.f, 1.f,
+            &motrix::engine::systems::demo_particle_size, 1.f, 50.f, 1.f,
             [](float value) {
-              motrix::engine::systems::particle_size = std::max(1.f, value);
+              motrix::engine::systems::demo_particle_size = std::max(1.f, value);
             },
             "Controls the particle size.");
 

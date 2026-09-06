@@ -2,19 +2,13 @@
 #pragma once
 
 #include "engine/components/camera.h"
+#include "engine/components/demo_tags.h"
 #include "engine/components/physics.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
 #include "engine/systems/canvas.h"
+#include "engine/systems/fluid_render.h"
 #include "engine/systems/physics.h"
-
-namespace motrix::engine::components {
-
-struct DensityParticleTag {
-  static constexpr std::string_view Name = "DensityParticle";
-};
-
-}  // namespace motrix::engine::components
 
 namespace motrix::engine::systems {
 

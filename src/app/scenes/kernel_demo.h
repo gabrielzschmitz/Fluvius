@@ -3,17 +3,10 @@
 
 #include "engine/components/camera.h"
 #include "engine/components/canvas.h"
+#include "engine/components/demo_tags.h"
 #include "engine/components/physics.h"
 #include "engine/ecs/ecs.h"
 #include "engine/globals.h"
-
-namespace motrix::engine::components {
-
-struct KernelParticleTag {
-  static constexpr std::string_view Name = "KernelParticle";
-};
-
-}  // namespace motrix::engine::components
 
 namespace motrix::engine::systems {
 

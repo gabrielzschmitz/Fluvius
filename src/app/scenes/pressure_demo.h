@@ -8,6 +8,7 @@
 #include "engine/globals.h"
 #include "engine/systems/camera.h"
 #include "engine/systems/canvas.h"
+#include "engine/systems/fluid_render.h"
 #include "engine/systems/physics.h"
 #include "entities/camera.h"
 #include "entities/canvas.h"
