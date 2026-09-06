@@ -1,6 +1,31 @@
 \section{Discussão}
 \label{sec:discussao}
 
-Na discussão, analise os resultados obtidos, comparando-os com estudos
-anteriores, destacando a contribuição do trabalho e suas implicações. Também
-pode abordar limitações e sugestões para trabalhos futuros.
+% Na discussão, analise os resultados obtidos, comparando-os com estudos
+% anteriores, destacando a contribuição do trabalho e suas implicações. Também
+% pode abordar limitações e sugestões para trabalhos futuros.
+
+\subsection{Limitações}
+\label{subsec:implementation_limitations}
+
+A principal limitação observada está relacionada ao custo computacional das
+interações entre partículas, que aumenta conforme a quantidade de partículas é
+ampliada. Esse comportamento limita a escalabilidade da implementação e reduz a
+taxa de quadros para configurações com maior número de partículas.
+
+Outra limitação está relacionada ao custo adicional da renderização. Embora a
+versão \textit{headless} apresente desempenho superior, a execução completa
+precisa realizar tanto os cálculos da simulação quanto a representação gráfica
+das partículas.
+
+O programa também utiliza uma implementação falha de multi-thread. O que
+explica os picos negativos em fps e tempo de passo, parte da simulação tem
+problemas tentando acessar dados em outras threads resultando em perda abruta
+de dados de algumas partículas.
+
+Além disso, não foram incorporadas técnicas de otimização presentes em
+simuladores mais avançados, como aceleração em GPU, estruturas espaciais
+especializadas para busca de vizinhos e refinamento adaptativo. A utilização
+dessas técnicas poderia reduzir o custo das interações e permitir a execução de
+simulações com maior quantidade de partículas mantendo uma taxa de quadros mais
+elevada.
