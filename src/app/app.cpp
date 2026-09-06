@@ -109,10 +109,9 @@ static void ParseCLIFlags(int argc, char** argv, m_app::SceneType& sceneType,
       print_and_exit = true;
     } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
       printf("Usage: fluvius [OPTIONS]\n");
-      printf("  -s, --scene <name>    Specify scene (fluid, kernel, "
-             "smoothing, density, pressure, viscosity)\n");
+      printf("  -s,  --scene <name>   Specify scene (fluid, kernel...)\n");
       printf("  -ls, --list-scenes    List available scenes and exit\n");
-      printf("  -h, --help            Show this help message\n");
+      printf("  -h,  --help           Show this help message\n");
       print_and_exit = true;
     } else if (arg[0] == '-') {
       logger::warn("[CLI] Unknown option: '{}'", arg);
