@@ -12,6 +12,7 @@
 #include "engine/systems/physics.h"
 #include "entities/camera.h"
 #include "entities/canvas.h"
+#include "entities/simulation.h"
 #include "entities/ui.h"
 
 namespace motrix::app {
@@ -273,7 +274,9 @@ inline void CreateViscosityDemoUI(m_eng::ECS& ecs) {
   m_eng::Entity window = m_ett::AddWindow(ecs, {20.f, 20.f}, 250.f, 100.f,
                                           "Viscosity Demo Controls");
   m_ett::AddSlider(ecs, window, m_eng::INVALID_ENTITY, "Particles",
-                   &viscosity_particles_float, 50.f, 500.f, 10.f, nullptr,
+                   []() { return viscosity_particles_float; },
+                   [](float value) { viscosity_particles_float = value; },
+                   50.f, 500.f, 10.f, nullptr,
                    "Number of particles on each side.");
 }
 
@@ -281,8 +284,8 @@ inline void InitViscosityDemo(AppState& state) {
   state.cameraEntity = m_ett::CreateCamera(state.ecs);
   state.canvasEntity = m_ett::CreateCanvasWithHandles(state.ecs, false);
 
-  m_ett::is_paused = false;
-  m_ett::render_particle_velocity = true;
+  m_ett::Simulation(state.ecs).is_paused = false;
+  m_ett::Simulation(state.ecs).render_particle_velocity = true;
 
   ResetViscosityDemo(state.ecs);
   CreateViscosityDemoUI(state.ecs);
@@ -301,14 +304,16 @@ inline void UpdateViscosityDemo(AppState& state, float dt) {
   m_eng::systems::UpdateCanvasInteraction(state.ecs, cam);
 
   static bool key_p_was_down = false;
-  if (IsKeyDown(KEY_P) && !key_p_was_down) m_ett::is_paused = !m_ett::is_paused;
+  if (IsKeyDown(KEY_P) && !key_p_was_down)
+    m_ett::Simulation(state.ecs).is_paused =
+      !m_ett::Simulation(state.ecs).is_paused;
   key_p_was_down = IsKeyDown(KEY_P);
 
   static bool key_r_was_down = false;
   if (IsKeyDown(KEY_R) && !key_r_was_down) ResetViscosityDemo(state.ecs);
   key_r_was_down = IsKeyDown(KEY_R);
 
-  if (m_ett::is_paused) {
+  if (m_ett::Simulation(state.ecs).is_paused) {
     m_eng::systems::UpdateCamera2D(state.ecs);
     return;
   }
@@ -326,6 +331,7 @@ inline void UpdateViscosityDemo(AppState& state, float dt) {
 inline void RenderViscosityDemo(AppState& state) {
   auto& cam =
     state.ecs.get<m_eng::components::CameraComponent>(state.cameraEntity);
+  auto& sim = m_ett::Simulation(state.ecs);
   m_eng::systems::RenderCanvas(state.ecs, cam);
 
   BeginMode2D(cam.camera);
@@ -336,9 +342,9 @@ inline void RenderViscosityDemo(AppState& state) {
     [&](m_eng::Entity, m_eng::components::PositionComponent& pos,
         m_eng::components::VelocityComponent& vel,
         m_eng::components::CircleComponent& circ) {
-      Color particle_color = m_eng::systems::VelocityToColor(vel.velocity);
+      Color particle_color = m_eng::systems::VelocityToColor(vel.velocity, sim);
       DrawCircleV(pos.position, circ.radius, particle_color);
-      if (m_ett::render_particle_velocity) {
+      if (sim.render_particle_velocity) {
         m_eng::systems::RenderArrow(pos.position, vel.velocity, circ.radius,
                                     particle_color, 0.25f);
       }

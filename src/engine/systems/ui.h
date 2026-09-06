@@ -308,9 +308,9 @@ inline void RenderSliders(ECS& ecs, Entity window_entity, float scroll_y,
                                              UIResolvedRectComponent& resolved,
                                              UILayoutChildComponent& layout) {
     if (layout.parent != window_entity) return;
-    if (!slider.value) return;
+    if (!slider.get_value) return;
 
-    float current_val = *slider.value;
+    float current_val = slider.get_value();
     Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
 
     Rectangle bar{rect.x, rect.y + 14 * uiScale, rect.width, 16 * uiScale};
@@ -349,8 +349,9 @@ inline void RenderSliders(ECS& ecs, Entity window_entity, float scroll_y,
       mouse_t = Clamp(mouse_t, 0.f, 1.f);
       float raw = slider.min + mouse_t * (slider.max - slider.min);
       float snapped = std::round(raw / slider.step) * slider.step;
-      *slider.value = Clamp(snapped, slider.min, slider.max);
-      if (slider.on_change) slider.on_change(*slider.value);
+      float new_value = Clamp(snapped, slider.min, slider.max);
+      if (slider.set_value) slider.set_value(new_value);
+      if (slider.on_change) slider.on_change(new_value);
     }
   });
 }
@@ -385,7 +386,7 @@ inline void RenderCheckboxes(ECS& ecs, Entity window_entity, float scroll_y,
         DrawWin95Box({check_x, box_y, box_size, box_size}, LIGHTGRAY);
       }
 
-      if (*checkbox.value) {
+      if (checkbox.get_value && checkbox.get_value()) {
         DrawLine(check_x + box_size * 0.2f, box_y + box_size * 0.5f,
                  check_x + box_size * 0.45f, box_y + box_size * 0.75f, BLACK);
 
@@ -397,8 +398,9 @@ inline void RenderCheckboxes(ECS& ecs, Entity window_entity, float scroll_y,
                rect.y + (rect.height - fontSize) * 0.5f, fontSize, BLACK);
 
       if (WasWidgetClicked(rect, input_consumed)) {
-        *checkbox.value = !(*checkbox.value);
-        if (checkbox.on_change) checkbox.on_change(*checkbox.value);
+        bool new_value = !(checkbox.get_value && checkbox.get_value());
+        if (checkbox.set_value) checkbox.set_value(new_value);
+        if (checkbox.on_change) checkbox.on_change(new_value);
       }
     });
 }
@@ -455,8 +457,12 @@ inline void RenderDropdowns(ECS& ecs, Entity window_entity, float scroll_y,
       DrawWin95Box(arrow_rect, LIGHTGRAY);
       DrawCenteredText("v", arrow_rect, kBaseFontSize * uiScale, BLACK);
 
-      std::string display =
-        dropdown.label + ": " + dropdown.options[*dropdown.selected_index];
+      std::string display = dropdown.label + ": ";
+      if (dropdown.get_index) {
+        int idx = dropdown.get_index();
+        if (idx >= 0 && idx < (int)dropdown.options.size())
+          display += dropdown.options[idx];
+      }
       float text_x = rect.x + 4.f * uiScale;
       float text_y = rect.y + (rect.height - kBaseFontSize * uiScale) * 0.5f;
 
@@ -520,7 +526,7 @@ inline void PrepassDropdownInput(ECS& ecs, bool& input_consumed) {
                               rect.width, option_h};
 
         if (CheckCollisionPointRec(mouse, option_rect)) {
-          *dropdown.selected_index = (int)i;
+          if (dropdown.set_index) dropdown.set_index((int)i);
           dropdown.expanded = false;
           input_consumed = true;
 
@@ -755,7 +761,7 @@ inline void UpdateDensityText(ECS& ecs) {
       if (text.text.find("Density:") != std::string::npos) {
         char buffer[64];
         snprintf(buffer, sizeof(buffer), "Density: %.6f",
-                 entities::selection_density);
+                 entities::Simulation(ecs).selection_density);
 
         std::string new_val = buffer;
 

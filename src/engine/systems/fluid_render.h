@@ -21,10 +21,11 @@ namespace motrix::engine::systems {
  * ============================================================================
  */
 
-inline Color PressureToColor(float pressure) {
-  float max_pressure = entities::target_density * entities::pressure_multiplier;
+inline Color PressureToColor(float pressure,
+                             const components::SimulationComponent& sim) {
+  float max_pressure = sim.target_density * sim.pressure_multiplier;
 
-  if (max_pressure <= 0.f) return entities::pressure_mid_color;
+  if (max_pressure <= 0.f) return sim.pressure_mid_color;
 
   float scale = Clamp(pressure / max_pressure, -1.f, 1.f);
 
@@ -36,18 +37,15 @@ inline Color PressureToColor(float pressure) {
     float t = scale + 1.f;
 
     return {
-      lerp(entities::pressure_low_color.r, entities::pressure_mid_color.r, t),
-      lerp(entities::pressure_low_color.g, entities::pressure_mid_color.g, t),
-      lerp(entities::pressure_low_color.b, entities::pressure_mid_color.b, t),
+      lerp(sim.pressure_low_color.r, sim.pressure_mid_color.r, t),
+      lerp(sim.pressure_low_color.g, sim.pressure_mid_color.g, t),
+      lerp(sim.pressure_low_color.b, sim.pressure_mid_color.b, t),
       130};
   }
 
-  return {lerp(entities::pressure_mid_color.r, entities::pressure_high_color.r,
-               scale),
-          lerp(entities::pressure_mid_color.g, entities::pressure_high_color.g,
-               scale),
-          lerp(entities::pressure_mid_color.b, entities::pressure_high_color.b,
-               scale),
+  return {lerp(sim.pressure_mid_color.r, sim.pressure_high_color.r, scale),
+          lerp(sim.pressure_mid_color.g, sim.pressure_high_color.g, scale),
+          lerp(sim.pressure_mid_color.b, sim.pressure_high_color.b, scale),
           130};
 }
 
@@ -88,7 +86,8 @@ inline void RenderArrow(Vector2 center, Vector2 vector, float radius,
   DrawCircleV(end, thickness * 0.5f, color);
 }
 
-inline Color SpeedToColor(float speed) {
+inline Color SpeedToColor(float speed,
+                          const components::SimulationComponent& sim) {
   constexpr float max_speed = 80.f;
   float speed_ratio = Clamp(speed / max_speed, 0.f, 1.f);
 
@@ -104,41 +103,42 @@ inline Color SpeedToColor(float speed) {
 
   if (speed_ratio < 0.33f) {
     float t = speed_ratio / 0.33f;
-    return BlendColor(entities::particle_low_color,
-                      entities::particle_mid_low_color, t);
+    return BlendColor(sim.particle_low_color, sim.particle_mid_low_color, t);
   } else if (speed_ratio < 0.66f) {
     float t = (speed_ratio - 0.33f) / 0.33f;
-    return BlendColor(entities::particle_mid_low_color,
-                      entities::particle_mid_high_color, t);
+    return BlendColor(sim.particle_mid_low_color, sim.particle_mid_high_color,
+                      t);
   } else {
     float t = (speed_ratio - 0.66f) / 0.34f;
-    return BlendColor(entities::particle_mid_high_color,
-                      entities::particle_high_color, t);
+    return BlendColor(sim.particle_mid_high_color, sim.particle_high_color, t);
   }
 }
 
-inline Color VelocityToColor(const Vector2& velocity) {
-  return SpeedToColor(Vector2Length(velocity));
+inline Color VelocityToColor(const Vector2& velocity,
+                             const components::SimulationComponent& sim) {
+  return SpeedToColor(Vector2Length(velocity), sim);
 }
 
 inline void RenderFluid(ECS& ecs,
                         const engine::components::CameraComponent& cam) {
+  auto& sim = entities::Simulation(ecs);
+
   BeginMode2D(cam.camera);
 
   ecs.group_view<components::PositionComponent, components::VelocityComponent,
                  components::CircleComponent>(
     [&](Entity e, components::PositionComponent& pos,
         components::VelocityComponent& vel, components::CircleComponent& c) {
-      Color particle_color = VelocityToColor(vel.velocity);
-      bool selected = e == entities::selected_particle;
+      Color particle_color = VelocityToColor(vel.velocity, sim);
+      bool selected = e == sim.selected_particle;
 
-      if (selected && entities::selection_locked) {
+      if (selected && sim.selection_locked) {
         DrawCircleV(pos.position, c.radius * 1.5f, WHITE);
-        if (entities::render_particle_velocity)
+        if (sim.render_particle_velocity)
           RenderArrow(pos.position, vel.velocity, c.radius * 1.5f, RED, 0.25f);
       } else {
         DrawCircleV(pos.position, c.radius, particle_color);
-        if (entities::render_particle_velocity)
+        if (sim.render_particle_velocity)
           RenderArrow(pos.position, vel.velocity, c.radius, particle_color,
                       0.25f);
       }
@@ -149,14 +149,16 @@ inline void RenderFluid(ECS& ecs,
 
 inline void RenderPressureField(
   ECS& ecs, const engine::components::CameraComponent& cam) {
+  auto& sim = entities::Simulation(ecs);
+
   BeginMode2D(cam.camera);
 
   ecs.group_view<components::PositionComponent, components::CircleComponent>(
     [&](Entity, components::PositionComponent& pos,
         components::CircleComponent& c) {
-      Color col = PressureToColor(c.pressure);
+      Color col = PressureToColor(c.pressure, sim);
 
-      DrawCircleGradient(pos.position, entities::smoothing_radius * 0.8f, col,
+      DrawCircleGradient(pos.position, sim.smoothing_radius * 0.8f, col,
                          Color{col.r, col.g, col.b, 0});
     });
 
@@ -179,6 +181,8 @@ inline void DrawTriangleCCW(Vector2 v1, Vector2 v2, Vector2 v3, Color color) {
 
 inline void RenderFluidFilled(ECS& ecs,
                               const engine::components::CameraComponent& cam) {
+  auto& sim = entities::Simulation(ecs);
+
   BeginMode2D(cam.camera);
 
   components::CanvasComponent* canvas_ptr = nullptr;
@@ -299,7 +303,7 @@ inline void RenderFluidFilled(ECS& ecs,
                       ? (speed_field[CellIndex(x, y)] / field[CellIndex(x, y)])
                       : 0.f;
 
-      Color col = SpeedToColor(speed);
+      Color col = SpeedToColor(speed, sim);
       float cell_value = std::max({v0, v1, v2, v3});
       float influence_alpha = (cell_value - threshold) / (1.f - threshold);
       influence_alpha = Clamp(influence_alpha, 0.f, 1.f);
@@ -422,19 +426,22 @@ inline void RenderFluidFilled(ECS& ecs,
   EndMode2D();
 }
 
-inline void RenderMouseSelectionCircle(const components::CameraComponent& cam) {
-  if (!entities::selection_locked) return;
+inline void RenderMouseSelectionCircle(ECS& ecs,
+                                       const components::CameraComponent& cam) {
+  auto& sim = entities::Simulation(ecs);
+  if (!sim.selection_locked) return;
 
   BeginMode2D(cam.camera);
 
-  DrawCircleLines(entities::selection_center.x, entities::selection_center.y,
-                  entities::smoothing_radius, entities::selection_color);
+  DrawCircleLines(sim.selection_center.x, sim.selection_center.y,
+                  sim.smoothing_radius, sim.selection_color);
 
   EndMode2D();
 }
 
 inline void RenderUserPath(ECS& ecs, const components::CameraComponent& cam) {
-  if (entities::user_path_points.size() < 2) return;
+  auto& sim = entities::Simulation(ecs);
+  if (sim.user_path_points.size() < 2) return;
 
   BeginMode2D(cam.camera);
 
@@ -443,13 +450,13 @@ inline void RenderUserPath(ECS& ecs, const components::CameraComponent& cam) {
 
   // Convert canvas-local points to world coordinates
   std::vector<Vector2> world_points;
-  world_points.resize(entities::user_path_points.size());
+  world_points.resize(sim.user_path_points.size());
 
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
-      for (size_t i = 0; i < entities::user_path_points.size(); ++i) {
+      for (size_t i = 0; i < sim.user_path_points.size(); ++i) {
         world_points[i] =
-          CanvasLocalToWorld(entities::user_path_points[i], canvas);
+          CanvasLocalToWorld(sim.user_path_points[i], canvas);
       }
     });
 

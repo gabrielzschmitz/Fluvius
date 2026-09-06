@@ -9,6 +9,7 @@
 #include "engine/logger.h"
 #include "engine/systems/physics.h"
 #include "engine/systems/ui.h"
+#include "entities/simulation.h"
 #include "raylib.h"
 #include "resource_dir.h"
 
@@ -118,6 +119,8 @@ static void InitApp(m_app::AppState& state, m_app::SceneType sceneType) {
 
   int num_cores = std::thread::hardware_concurrency();
   m_eng::systems::InitThreads(num_cores, state.ecs);
+
+  motrix::entities::RegisterSimulationRoot(state.ecs);
 
   m_app::Scenes::Get(state.currentScene).init(state);
 

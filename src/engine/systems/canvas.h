@@ -105,7 +105,7 @@ inline void UpdateCanvasInteraction(ECS& ecs,
       }
 
       if (canvas.dragging_edge != components::CanvasComponent::Edge::EdgeNone) {
-        if (!entities::is_paused) {
+        if (!entities::Simulation(ecs).is_paused) {
           Vector2 world_delta = mouse_world - prev_mouse_world;
 
           canvas.position.x += world_delta.x;
@@ -115,7 +115,7 @@ inline void UpdateCanvasInteraction(ECS& ecs,
 
       if (canvas.dragging_corner !=
           components::CanvasComponent::Corner::CornerNone) {
-        if (!entities::is_paused) {
+        if (!entities::Simulation(ecs).is_paused) {
           float dx = mouse_world.x - canvas.position.x;
           float dy = mouse_world.y - canvas.position.y;
           float angle = std::atan2(dy, dx);

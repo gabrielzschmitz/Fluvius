@@ -21,5 +21,3 @@ inline constexpr int CANVAS_H = 360;
 inline float uiScale = 2.f;
 
 inline Font defaultFont{};
-
-inline int PARTICLE_NUMBER = 1024;

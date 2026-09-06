@@ -10,6 +10,7 @@
 #include "../engine/globals.h"
 #include "raylib.h"
 #include "raymath.h"
+#include "simulation.h"
 
 namespace motrix::entities {
 
@@ -23,53 +24,14 @@ namespace motrix::entities {
  * Characteristics:
  *   • multiple ECS entities
  *   • physics + render components
+ *
+ * All simulation parameters/state live in the root entity's
+ * SimulationComponent (see simulation.h); only the particle entity cache
+ * remains file-local here.
  * ============================================================================
  */
 
 inline std::vector<engine::Entity> fluid_particles;
-
-inline Color selection_color = {255, 255, 255, 191};
-inline bool selection_active = true;
-inline float selection_density = 0.f;
-inline Vector2 selection_center = {0.f, 0.f};
-inline bool selection_locked = false;
-inline engine::Entity selected_particle{};
-
-inline bool render_fluid_filled = false;
-inline bool render_pressure_field = false;
-inline bool render_fluid_particles = true;
-inline bool render_particle_velocity = true;
-
-inline float gravity = 1.0f;
-inline bool create_centered = 1.0f;
-inline float smoothing_radius = 50.f;
-inline bool is_paused = true;
-inline float sim_speed = 1.0f;
-
-inline float target_density = 0.000425f;
-inline float pressure_multiplier = 250.f;
-inline float viscosity = 0.8f;
-inline float surface_tension = 0.25f;
-inline float velocity_damping = 0.997f;
-inline float particle_size =
-  Clamp(2.0f * std::pow(1000.0f / static_cast<float>(PARTICLE_NUMBER), 0.4f),
-        0.5f, 3.0f);
-
-inline Color pressure_low_color = {0, 0, 128, 130};      // blue
-inline Color pressure_mid_color = {255, 255, 255, 130};  // white
-inline Color pressure_high_color = {255, 50, 50, 130};   // red
-
-inline Color particle_low_color = {0, 120, 255, 190};       // blue
-inline Color particle_mid_low_color = {0, 255, 255, 190};   // cyan
-inline Color particle_mid_high_color = {255, 220, 0, 180};  // yellow
-inline Color particle_high_color = {255, 50, 50, 160};      // red
-
-inline std::vector<Vector2> user_path_points;
-inline bool is_drawing_path = false;
-inline const float path_point_spacing = 1.f;
-
-inline bool needs_reset = false;
-inline bool particle_cache_dirty = true;
 
 inline engine::Entity CreateParticleEntity(engine::ECS& ecs, Vector2 pos,
                                            float radius, Color color) {
@@ -88,7 +50,8 @@ inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
   std::vector<Vector2> placed_positions;
   placed_positions.reserve(particle_count);
 
-  float radius = particle_size;
+  auto& sim = Simulation(ecs);
+  float radius = sim.particle_size;
   float min_dist = radius * 1.25f;
   float min_dist_sq = min_dist * min_dist;
 
@@ -157,37 +120,38 @@ inline void CreateFluid(engine::ECS& ecs, size_t particle_count = 10000,
 }
 
 inline void ResetFluid(engine::ECS& ecs) {
-  gravity = 1.0f;
-  smoothing_radius = 50.f;
-  is_paused = true;
-  sim_speed = 1.0f;
-  create_centered = true;
+  auto& sim = Simulation(ecs);
 
-  target_density = 0.000425f;
-  pressure_multiplier = 250.f;
-  velocity_damping = 0.997f;
+  sim.gravity = 1.0f;
+  sim.smoothing_radius = 50.f;
+  sim.is_paused = true;
+  sim.sim_speed = 1.0f;
+  sim.create_centered = true;
 
-  particle_size =
-    Clamp(2.0f * std::pow(1000.0f / static_cast<float>(PARTICLE_NUMBER), 0.4f),
-          0.5f, 3.0f);
+  sim.target_density = 0.000425f;
+  sim.pressure_multiplier = 250.f;
+  sim.velocity_damping = 0.997f;
 
-  pressure_low_color = {85, 211, 241, 130};
-  pressure_mid_color = {255, 255, 255, 130};
-  pressure_high_color = {255, 50, 50, 130};
+  sim.particle_size = DefaultParticleSize(sim.particle_count);
 
-  selection_density = 0.f;
-  selection_active = true;
-  selection_locked = false;
-  selected_particle = {};
+  sim.pressure_low_color = {85, 211, 241, 130};
+  sim.pressure_mid_color = {255, 255, 255, 130};
+  sim.pressure_high_color = {255, 50, 50, 130};
 
-  size_t particle_count = PARTICLE_NUMBER;
+  sim.selection_density = 0.f;
+  sim.selection_active = true;
+  sim.selection_locked = false;
+  sim.selected_particle = {};
+
+  size_t particle_count = static_cast<size_t>(sim.particle_count);
 
   for (auto e : fluid_particles)
     if (ecs.is_alive(e)) ecs.destroy_entity(e);
 
-  CreateFluid(ecs, particle_count, create_centered);
+  CreateFluid(ecs, particle_count, sim.create_centered);
 
-  particle_cache_dirty = true;
+  sim.particle_cache_dirty = true;
+  sim.needs_reset = false;
 }
 
 }  // namespace motrix::entities

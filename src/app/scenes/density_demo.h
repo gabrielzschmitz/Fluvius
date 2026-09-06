@@ -177,36 +177,50 @@ inline void CreateDensityDemoUI(engine::ECS& ecs) {
     AddWindow(ecs, {20.f, 20.f}, 250.f, 250.f, "Density Controls");
 
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Columns",
-            &motrix::engine::systems::grid_columns_float, 2.f, 50.f, 1.f,
+            []() { return motrix::engine::systems::grid_columns_float; },
             [](float value) {
               motrix::engine::systems::grid_columns = static_cast<int>(value);
               motrix::engine::systems::grid_columns_float = value;
               motrix::engine::systems::pending_columns = static_cast<int>(value);
             },
-            "Number of columns in the grid.");
+            2.f, 50.f, 1.f, nullptr, "Number of columns in the grid.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Rows",
-            &motrix::engine::systems::grid_rows_float, 2.f, 20.f, 1.f,
+            []() { return motrix::engine::systems::grid_rows_float; },
             [](float value) {
               motrix::engine::systems::grid_rows = static_cast<int>(value);
               motrix::engine::systems::grid_rows_float = value;
               motrix::engine::systems::pending_rows = static_cast<int>(value);
             },
-            "Number of rows in the grid.");
+            2.f, 20.f, 1.f, nullptr, "Number of rows in the grid.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Radius",
-            &motrix::engine::systems::grid_smoothing_radius, 0.f, 320.f, 1.f,
-            nullptr, "Smoothing radius around center particle.");
+            []() { return motrix::engine::systems::grid_smoothing_radius; },
+            [](float value) {
+              motrix::engine::systems::grid_smoothing_radius = value;
+            },
+            0.f, 320.f, 1.f, nullptr, "Smoothing radius around center particle.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Font Size",
-            &motrix::engine::systems::grid_font_size, 6.f, 20.f, 1.f, nullptr,
-            "Text font size.");
+            []() { return motrix::engine::systems::grid_font_size; },
+            [](float value) { motrix::engine::systems::grid_font_size = value; },
+            6.f, 20.f, 1.f, nullptr, "Text font size.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Mass",
-            &motrix::engine::systems::grid_particle_mass, 100.f, 10000.f, 100.f,
-            nullptr, "Particle mass for density calculation.");
+            []() { return motrix::engine::systems::grid_particle_mass; },
+            [](float value) {
+              motrix::engine::systems::grid_particle_mass = value;
+            },
+            100.f, 10000.f, 100.f, nullptr,
+            "Particle mass for density calculation.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Particle Size",
-            &motrix::engine::systems::grid_particle_size, 2.f, 15.f, 0.5f,
-            nullptr, "Particle circle radius.");
+            []() { return motrix::engine::systems::grid_particle_size; },
+            [](float value) {
+              motrix::engine::systems::grid_particle_size = value;
+            },
+            2.f, 15.f, 0.5f, nullptr, "Particle circle radius.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Arrow Radius",
-            &motrix::engine::systems::grid_arrow_radius, 0.f, 20.f, 0.5f,
-            nullptr, "Arrow start radius from particle center.");
+            []() { return motrix::engine::systems::grid_arrow_radius; },
+            [](float value) {
+              motrix::engine::systems::grid_arrow_radius = value;
+            },
+            0.f, 20.f, 0.5f, nullptr, "Arrow start radius from particle center.");
 }
 
 }  // namespace motrix::entities

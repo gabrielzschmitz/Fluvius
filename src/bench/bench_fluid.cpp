@@ -46,10 +46,22 @@
 #include "entities/camera.h"
 #include "entities/canvas.h"
 #include "entities/fluid.h"
+#include "entities/simulation.h"
 #include "raylib.h"
 
 namespace m_eng = motrix::engine;
 namespace m_ett = motrix::entities;
+
+// Fixed simulation parameters (matching the paper's Table).
+static constexpr float kParticleSize = 2.0f;       // particle size
+static constexpr float kSmoothingRadius = 50.f;    // support radius h
+static constexpr float kTargetDensity = 0.000425f;
+static constexpr float kPressureMultiplier = 250.f;
+static constexpr float kViscosity = 0.8f;
+static constexpr float kGravity = 1.0f;
+static constexpr float kSimSpeed = 1.0f;
+static constexpr float kVelocityDamping = 0.997f;
+static constexpr float kSurfaceTension = 0.25f;
 
 struct BenchConfig {
   int min_particles = 50;
@@ -198,27 +210,28 @@ static bool Validate(const BenchConfig& cfg) {
 }
 
 // Applies the fixed simulation parameters used by the experiments.
-static void ApplySimulationParameters() {
-  m_ett::particle_size = 2.0f;     // particle size
-  m_ett::smoothing_radius = 50.f;  // support radius h
-  m_ett::target_density = 0.000425f;
-  m_ett::pressure_multiplier = 250.f;
-  m_ett::viscosity = 0.8f;
-  m_ett::gravity = 1.0f;
-  m_ett::sim_speed = 1.0f;
-  m_ett::is_paused = false;
-  m_ett::create_centered = true;
+static void ApplySimulationParameters(m_eng::ECS& ecs) {
+  auto& sim = m_ett::Simulation(ecs);
+  sim.particle_size = kParticleSize;      // particle size
+  sim.smoothing_radius = kSmoothingRadius;  // support radius h
+  sim.target_density = kTargetDensity;
+  sim.pressure_multiplier = kPressureMultiplier;
+  sim.viscosity = kViscosity;
+  sim.gravity = kGravity;
+  sim.sim_speed = kSimSpeed;
+  sim.is_paused = false;
+  sim.create_centered = true;
 
   // Not listed in the table but required for a valid SPH run; keep the same
   // values the interactive app uses.
-  m_ett::velocity_damping = 0.997f;
-  m_ett::surface_tension = 0.25f;
+  sim.velocity_damping = kVelocityDamping;
+  sim.surface_tension = kSurfaceTension;
 }
 
-// Fully resets every piece of state the physics module and entity factories
-// keep across runs (caches, spatial grid, force/density buffers, particle and
-// camera handles, kernel cache) so no leftover data from a previous particle
-// count can influence the next measurement.
+// Fully resets the physics module's global buffers and the particle factory
+// so no leftover data from a previous particle count can influence the next
+// measurement. Simulation parameters state lives in each run's world (root
+// entity), so it needs no reset here.
 static void ResetPhysicsModule() {
   // physics module buffers / caches
   m_eng::systems::particle_entities.clear();
@@ -239,17 +252,16 @@ static void ResetPhysicsModule() {
 
   // entity factory state
   m_ett::fluid_particles.clear();
-  m_ett::user_path_points.clear();
-  m_ett::is_drawing_path = false;
-  m_ett::selection_locked = false;
-  m_ett::particle_cache_dirty = true;
 }
 
-// Creates a fresh, empty world with the simulation parameters applied and the
-// physics module fully pointed at it. Each run gets its own clean EC/state.
+// Creates a fresh, empty world with the simulation root registered, the fixed
+// parameters applied and the physics module fully pointed at it. Each run gets
+// its own clean ECS/state.
 static void CreateWorld(m_eng::ECS& world, int threads, bool render,
                         m_eng::Entity& cam_entity) {
   ResetPhysicsModule();
+  m_ett::RegisterSimulationRoot(world);
+  ApplySimulationParameters(world);
   m_eng::systems::ShutdownThreads();
   m_eng::systems::InitThreads(threads, world);
 
@@ -262,7 +274,7 @@ static void CreateWorld(m_eng::ECS& world, int threads, bool render,
 // Rebuilds the fluid with `count` particles (deterministic centered grid).
 static void PrepareFluid(m_eng::ECS& ecs, int count) {
   m_ett::CreateFluid(ecs, static_cast<size_t>(count), true);
-  m_ett::particle_cache_dirty = true;
+  m_ett::Simulation(ecs).particle_cache_dirty = true;
   m_eng::systems::particle_entities_cached = false;
   m_eng::systems::spatial_grid.clear();
 }
@@ -337,14 +349,11 @@ int main(int argc, char** argv) {
     if (cfg.threads == 0) cfg.threads = 1;
   }
 
-  ApplySimulationParameters();
-
   std::ostringstream header;
-  header << "particle_size=" << m_ett::particle_size
-         << ", h=" << m_ett::smoothing_radius
-         << ", target_density=" << m_ett::target_density
-         << ", pressure_multiplier=" << m_ett::pressure_multiplier
-         << ", viscosity=" << m_ett::viscosity << ", gravity=" << m_ett::gravity
+  header << "particle_size=" << kParticleSize << ", h=" << kSmoothingRadius
+         << ", target_density=" << kTargetDensity
+         << ", pressure_multiplier=" << kPressureMultiplier
+         << ", viscosity=" << kViscosity << ", gravity=" << kGravity
          << ", dt=" << cfg.dt << ", threads=" << cfg.threads
          << ", steps(Ns)=" << cfg.steps << ", warmup=" << cfg.warmup
          << ", runs=" << cfg.runs << ", settle=" << cfg.settle_sec << "s"

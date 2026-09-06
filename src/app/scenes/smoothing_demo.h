@@ -63,21 +63,23 @@ inline void CreateSmoothingDemoUI(engine::ECS& ecs) {
     AddWindow(ecs, {20.f, 20.f}, 250.f, 200.f, "Smoothing Controls");
 
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Radius",
-            &motrix::engine::systems::demo_smoothing_radius, 0.f, 175.f, 1.f,
+            []() { return motrix::engine::systems::demo_smoothing_radius; },
             [](float value) {
               motrix::engine::systems::demo_smoothing_radius = value;
             },
+            0.f, 175.f, 1.f, nullptr,
             "Controls the influence radius around the particle.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Strength",
-            &motrix::engine::systems::strength, 0.f, 255.f, 1.f,
+            []() { return motrix::engine::systems::strength; },
             [](float value) { motrix::engine::systems::strength = value; },
+            0.f, 255.f, 1.f, nullptr,
             "Controls the strengh of influence from smoothing radius.");
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Size",
-            &motrix::engine::systems::demo_particle_size, 1.f, 50.f, 1.f,
+            []() { return motrix::engine::systems::demo_particle_size; },
             [](float value) {
               motrix::engine::systems::demo_particle_size = std::max(1.f, value);
             },
-            "Controls the particle size.");
+            1.f, 50.f, 1.f, nullptr, "Controls the particle size.");
 
   logger::info("[GUI] Created window '{}' (entity:{}:{})",
                ecs.get<engine::components::UIWindowComponent>(window).title,

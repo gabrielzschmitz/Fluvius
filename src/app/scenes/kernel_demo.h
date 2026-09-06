@@ -118,8 +118,9 @@ inline void CreateKernelDemoUI(engine::ECS& ecs) {
               "Kernel Demo Controls");
 
   AddSlider(ecs, window, engine::INVALID_ENTITY, "Blur",
-            &motrix::engine::systems::blur_intensity, 0.f, 1.f, 0.01f,
+            []() { return motrix::engine::systems::blur_intensity; },
             [](float value) { motrix::engine::systems::blur_intensity = value; },
+            0.f, 1.f, 0.01f, nullptr,
             "Controls the blur intensity on the right side.");
 }
 

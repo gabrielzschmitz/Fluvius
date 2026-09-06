@@ -125,9 +125,8 @@ inline void CacheParticleEntities(ECS& ecs) {
 inline std::unordered_map<GridCell, std::vector<size_t>, GridCellHash>
   spatial_grid;
 
-inline void BuildSpatialGrid() {
+inline void BuildSpatialGrid(float h) {
   spatial_grid.clear();
-  float h = entities::smoothing_radius;
 
   for (size_t i = 0; i < predicted_positions.size(); ++i) {
     GridCell cell = PositionToCell(predicted_positions[i], h);
@@ -138,15 +137,15 @@ inline void BuildSpatialGrid() {
 inline float cached_gravity_accel = 0.f;
 inline bool kernel_cache_valid = false;
 
-inline void UpdateKernelCache() {
-  if (kernel_cache_valid && cached_gravity_accel == entities::gravity * 10.f)
-    return;
-  cached_gravity_accel = entities::gravity * 10.f;
+inline void UpdateKernelCache(float gravity) {
+  if (kernel_cache_valid && cached_gravity_accel == gravity * 10.f) return;
+  cached_gravity_accel = gravity * 10.f;
   kernel_cache_valid = true;
 }
 
-inline float ConvertDensityToPressure(float density) {
-  return (density - entities::target_density) * entities::pressure_multiplier;
+inline float ConvertDensityToPressure(const components::SimulationComponent& sim,
+                                      float density) {
+  return (density - sim.target_density) * sim.pressure_multiplier;
 }
 
 /**
@@ -159,6 +158,8 @@ inline void PredictPositions(ECS& ecs, float dt) {
   if (!particle_entities_cached) {
     CacheParticleEntities(ecs);
   }
+
+  auto& sim = entities::Simulation(ecs);
 
   float gravity = cached_gravity_accel;
   size_t n = particle_entities.size();
@@ -191,7 +192,7 @@ inline void PredictPositions(ECS& ecs, float dt) {
     });
   }
 
-  BuildSpatialGrid();
+  BuildSpatialGrid(sim.smoothing_radius);
 }
 
 /**
@@ -203,6 +204,8 @@ inline void PredictPositions(ECS& ecs, float dt) {
 struct ParallelDensityTask {
   int start;
   int end;
+  float h;
+  float mass;
 };
 
 inline std::vector<float> temp_densities;
@@ -212,9 +215,9 @@ inline void* ComputeDensityRange(void* arg) {
   int start = task->start;
   int end = task->end;
 
-  float h = entities::smoothing_radius;
+  float h = task->h;
   float h2 = h * h;
-  float mass = entities::particle_size;
+  float mass = task->mass;
 
   for (int i = start; i < end && i < static_cast<int>(particle_entities.size());
        ++i) {
@@ -256,9 +259,10 @@ inline void* ComputeDensityRange(void* arg) {
  */
 
 inline void ComputeParticlePressure(ECS& ecs) {
+  auto& sim = entities::Simulation(ecs);
   ecs.group_view<components::CircleComponent>(
     [&](Entity, components::CircleComponent& c) {
-      c.pressure = ConvertDensityToPressure(c.density);
+      c.pressure = ConvertDensityToPressure(sim, c.density);
     });
 }
 
@@ -271,6 +275,8 @@ inline void ComputeParticlePressure(ECS& ecs) {
 struct ParallelForceTask {
   int start;
   int end;
+  float h;
+  float mass;
 };
 
 inline std::vector<Vector2> pressure_forces;
@@ -285,9 +291,9 @@ inline void* ComputePressureForceRange(void* arg) {
   int start = task->start;
   int end = task->end;
 
-  float h = entities::smoothing_radius;
+  float h = task->h;
   float h2 = h * h;
-  float mass = entities::particle_size;
+  float mass = task->mass;
 
   for (int i = start; i < end && i < static_cast<int>(particle_entities.size());
        ++i) {
@@ -359,14 +365,16 @@ inline void* ComputePressureForceRange(void* arg) {
 }
 
 inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
+  auto& sim = entities::Simulation(ecs);
+
   int effective_threads = GetEffectiveThreads(particle_entities.size());
   if (!threads_initialized || effective_threads <= 1 ||
       particle_entities.size() < 256) {
-    float h = entities::smoothing_radius;
+    float h = sim.smoothing_radius;
     float h2 = h * h;
-    float mass = entities::particle_size;
-    float viscosity = entities::viscosity;
-    float surface_tension = entities::surface_tension;
+    float mass = sim.particle_size;
+    float viscosity = sim.viscosity;
+    float surface_tension = sim.surface_tension;
 
     for (size_t i = 0; i < particle_entities.size(); ++i) {
       Entity e1 = particle_entities[i];
@@ -459,12 +467,12 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
     velocities[i] = v.velocity;
   }
 
-  ParallelForceTask seed{0, 0};
+  ParallelForceTask seed{0, 0, sim.smoothing_radius, sim.particle_size};
   RunParallelChunks(effective_threads, n, seed, ComputePressureForceRange);
 
-  float viscosity = entities::viscosity;
-  float surface_tension = entities::surface_tension;
-  float mass = entities::particle_size;
+  float viscosity = sim.viscosity;
+  float surface_tension = sim.surface_tension;
+  float mass = sim.particle_size;
 
   for (int i = 0; i < n; ++i) {
     auto& v1 = ecs.get<components::VelocityComponent>(particle_entities[i]);
@@ -528,7 +536,8 @@ inline bool IsMouseOnCanvas(ECS& ecs, Vector2 mouse_world) {
 
 inline void UpdateSelectionInput(
   ECS& ecs, const engine::components::CameraComponent& cam) {
-  if (!entities::selection_active) return;
+  auto& sim = entities::Simulation(ecs);
+  if (!sim.selection_active) return;
 
   Vector2 mouse_screen = GetMousePosition();
   Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, cam.camera);
@@ -538,24 +547,26 @@ inline void UpdateSelectionInput(
     return;
 
   if (IsMouseOverCanvas(ecs, mouse_world)) {
-    entities::selection_locked = false;
-    entities::selection_density = 0.f;
+    sim.selection_locked = false;
+    sim.selection_density = 0.f;
     return;
   }
 
   if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-    entities::selection_center = mouse_world;
-    entities::selection_locked = true;
+    sim.selection_center = mouse_world;
+    sim.selection_locked = true;
   }
 
   if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
-    entities::selection_locked = false;
-    entities::selection_density = 0.f;
+    sim.selection_locked = false;
+    sim.selection_density = 0.f;
   }
 }
 
 inline void UpdatePathInput(ECS& ecs,
                             const engine::components::CameraComponent& cam) {
+  auto& sim = entities::Simulation(ecs);
+
   Vector2 mouse_screen = GetMousePosition();
   Vector2 mouse_world = GetScreenToWorld2D(mouse_screen, cam.camera);
 
@@ -570,14 +581,14 @@ inline void UpdatePathInput(ECS& ecs,
   static bool draw_key_was_down = false;
   bool draw_key_down = IsKeyDown(KEY_B);
   if (draw_key_down && !draw_key_was_down) {
-    entities::is_drawing_path = !entities::is_drawing_path;
-    if (entities::is_drawing_path) {
-      entities::user_path_points.clear();
+    sim.is_drawing_path = !sim.is_drawing_path;
+    if (sim.is_drawing_path) {
+      sim.user_path_points.clear();
       if (IsMouseOnCanvas(ecs, mouse_world)) {
         // Store in canvas-local coordinates
         ecs.group_view<components::CanvasComponent>(
           [&](Entity, components::CanvasComponent& canvas) {
-            entities::user_path_points.push_back(
+            sim.user_path_points.push_back(
               WorldToCanvasLocal(mouse_world, canvas));
           });
       }
@@ -586,32 +597,32 @@ inline void UpdatePathInput(ECS& ecs,
   draw_key_was_down = draw_key_down;
 
   // Continue drawing while in drawing mode and on canvas
-  if (entities::is_drawing_path && IsMouseOnCanvas(ecs, mouse_world)) {
-    if (!entities::user_path_points.empty()) {
+  if (sim.is_drawing_path && IsMouseOnCanvas(ecs, mouse_world)) {
+    if (!sim.user_path_points.empty()) {
       // Convert last stored point (canvas-local) back to world for distance check
       Vector2 last_world = mouse_world;
       ecs.group_view<components::CanvasComponent>(
         [&](Entity, components::CanvasComponent& canvas) {
           last_world =
-            CanvasLocalToWorld(entities::user_path_points.back(), canvas);
+            CanvasLocalToWorld(sim.user_path_points.back(), canvas);
         });
 
       float dx = mouse_world.x - last_world.x;
       float dy = mouse_world.y - last_world.y;
       float dist = sqrtf(dx * dx + dy * dy);
 
-      if (dist >= entities::path_point_spacing) {
+      if (dist >= sim.path_point_spacing) {
         // Store in canvas-local coordinates
         ecs.group_view<components::CanvasComponent>(
           [&](Entity, components::CanvasComponent& canvas) {
-            entities::user_path_points.push_back(
+            sim.user_path_points.push_back(
               WorldToCanvasLocal(mouse_world, canvas));
           });
       }
     } else {
       ecs.group_view<components::CanvasComponent>(
         [&](Entity, components::CanvasComponent& canvas) {
-          entities::user_path_points.push_back(
+          sim.user_path_points.push_back(
             WorldToCanvasLocal(mouse_world, canvas));
         });
     }
@@ -619,22 +630,23 @@ inline void UpdatePathInput(ECS& ecs,
 }
 
 inline void UpdateSelectionDensity(ECS& ecs) {
-  if (!entities::selection_locked) return;
+  auto& sim = entities::Simulation(ecs);
+  if (!sim.selection_locked) return;
 
   float nearest = FLT_MAX;
 
   ecs.group_view<components::PositionComponent, components::CircleComponent>(
     [&](Entity e, components::PositionComponent& pos,
         components::CircleComponent& c) {
-      float dx = pos.position.x - entities::selection_center.x;
-      float dy = pos.position.y - entities::selection_center.y;
+      float dx = pos.position.x - sim.selection_center.x;
+      float dy = pos.position.y - sim.selection_center.y;
 
       float d = dx * dx + dy * dy;
 
       if (d < nearest) {
         nearest = d;
-        entities::selection_density = c.density;
-        entities::selected_particle = e;
+        sim.selection_density = c.density;
+        sim.selected_particle = e;
       }
     });
 }
@@ -646,6 +658,7 @@ inline void UpdateSelectionDensity(ECS& ecs) {
  */
 inline void ResolveCollisions(ECS& ecs) {
   const float particle_repulsion = 0.05f;
+  auto& sim = entities::Simulation(ecs);
 
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
@@ -737,7 +750,7 @@ inline void ResolveCollisions(ECS& ecs) {
       }
     }
   } else {
-    float cell_size = entities::particle_size * 4.f;
+    float cell_size = sim.particle_size * 4.f;
     if (cell_size < 1.f) cell_size = 1.f;
     int cols = static_cast<int>(CANVAS_W / cell_size) + 3;
     int rows = static_cast<int>(CANVAS_H / cell_size) + 3;
@@ -818,15 +831,15 @@ inline void ResolveCollisions(ECS& ecs) {
   }
 
   // Path collision
-  if (entities::user_path_points.size() >= 2) {
+  if (sim.user_path_points.size() >= 2) {
     ecs.group_view<components::CanvasComponent>(
       [&](Entity, components::CanvasComponent& canvas) {
         // Convert all points to world coordinates
         std::vector<Vector2> world_path;
-        world_path.resize(entities::user_path_points.size());
-        for (size_t i = 0; i < entities::user_path_points.size(); ++i) {
+        world_path.resize(sim.user_path_points.size());
+        for (size_t i = 0; i < sim.user_path_points.size(); ++i) {
           world_path[i] =
-            CanvasLocalToWorld(entities::user_path_points[i], canvas);
+            CanvasLocalToWorld(sim.user_path_points[i], canvas);
         }
 
         bool is_closed = false;
@@ -950,12 +963,14 @@ inline void ResolveCollisions(ECS& ecs) {
  * ============================================================================
  */
 inline void ComputeParticleDensity(ECS& ecs) {
+  auto& sim = entities::Simulation(ecs);
+
   int effective_threads = GetEffectiveThreads(particle_entities.size());
   if (!threads_initialized || effective_threads <= 1 ||
       particle_entities.size() < 256) {
-    float h = entities::smoothing_radius;
+    float h = sim.smoothing_radius;
     float h2 = h * h;
-    float mass = entities::particle_size;
+    float mass = sim.particle_size;
 
     for (size_t i = 0; i < particle_entities.size(); ++i) {
       Entity e = particle_entities[i];
@@ -994,7 +1009,7 @@ inline void ComputeParticleDensity(ECS& ecs) {
   int n = static_cast<int>(particle_entities.size());
   temp_densities.resize(n);
 
-  ParallelDensityTask seed{0, 0};
+  ParallelDensityTask seed{0, 0, sim.smoothing_radius, sim.particle_size};
   RunParallelChunks(effective_threads, n, seed, ComputeDensityRange);
 
   for (int i = 0; i < n; ++i) {
@@ -1009,16 +1024,18 @@ inline void ComputeParticleDensity(ECS& ecs) {
  * ============================================================================
  */
 inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
-  if (entities::particle_cache_dirty || !particle_entities_cached) {
+  auto& sim = entities::Simulation(ecs);
+
+  if (sim.particle_cache_dirty || !particle_entities_cached) {
     CacheParticleEntities(ecs);
-    entities::particle_cache_dirty = false;
+    sim.particle_cache_dirty = false;
   }
 
-  if (entities::is_paused && !force_simulate) return;
+  if (sim.is_paused && !force_simulate) return;
 
-  UpdateKernelCache();
+  UpdateKernelCache(sim.gravity);
 
-  float effective_dt = dt * entities::sim_speed;
+  float effective_dt = dt * sim.sim_speed;
 
   PredictPositions(ecs, effective_dt);
   ComputeParticleDensity(ecs);
@@ -1027,7 +1044,7 @@ inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
 
   size_t n = particle_entities.size();
   for (size_t i = 0; i < n; ++i) {
-    circ_cache[i]->radius = entities::particle_size;
+    circ_cache[i]->radius = sim.particle_size;
   }
 
   for (size_t i = 0; i < n; ++i) {
@@ -1035,7 +1052,7 @@ inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
     pos_cache[i]->position.y += vel_cache[i]->velocity.y * effective_dt;
   }
 
-  float damp = entities::velocity_damping;
+  float damp = sim.velocity_damping;
   for (size_t i = 0; i < n; ++i) {
     vel_cache[i]->velocity.x *= damp;
     vel_cache[i]->velocity.y *= damp;

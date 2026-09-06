@@ -60,23 +60,33 @@ struct UIResolvedRectComponent {
     : rect(r) {}
 };
 
+/**
+ * Slider/checkbox/dropdown values are bound via getter/setter lambdas instead
+ * of raw pointers. The SparseSet can relocate components on entity removal, so
+ * a long-lived raw pointer into a component field is unsafe. Bindings capture
+ * the ECS + owning entity + member pointer and re-resolve on every access
+ * (see `entities::FieldBinding`).
+ */
 struct UISliderComponent {
   static constexpr std::string_view Name = "UISlider";
 
   std::string label;
-  float* value = nullptr;
+  std::function<float()> get_value;
+  std::function<void(float)> set_value;
   float min = 0.f;
   float max = 1.f;
   float step = 0.1f;
   bool dragging = false;
   std::function<void(float)> on_change;
 
-  UISliderComponent(std::string text = {}, float* bound_value = nullptr,
+  UISliderComponent(std::string text = {}, std::function<float()> getter = {},
+                    std::function<void(float)> setter = {},
                     float min_value = 0.f, float max_value = 1.f,
                     float step_value = 0.1f,
                     std::function<void(float)> callback = {})
     : label(std::move(text)),
-      value(bound_value),
+      get_value(std::move(getter)),
+      set_value(std::move(setter)),
       min(min_value),
       max(max_value),
       step(step_value),
@@ -87,12 +97,17 @@ struct UICheckboxComponent {
   static constexpr std::string_view Name = "UICheckbox";
 
   std::string label;
-  bool* value = nullptr;
+  std::function<bool()> get_value;
+  std::function<void(bool)> set_value;
   std::function<void(bool)> on_change;
 
-  UICheckboxComponent(std::string text = {}, bool* bound = nullptr,
+  UICheckboxComponent(std::string text = {}, std::function<bool()> getter = {},
+                      std::function<void(bool)> setter = {},
                       std::function<void(bool)> callback = {})
-    : label(std::move(text)), value(bound), on_change(std::move(callback)) {}
+    : label(std::move(text)),
+      get_value(std::move(getter)),
+      set_value(std::move(setter)),
+      on_change(std::move(callback)) {}
 };
 
 struct UIButtonComponent {
@@ -120,16 +135,19 @@ struct UIDropdownComponent {
 
   std::string label;
   std::vector<std::string> options;
-  int* selected_index = nullptr;
+  std::function<int()> get_index;
+  std::function<void(int)> set_index;
   bool expanded = false;
   std::function<void(const std::string&)> on_select;
 
   UIDropdownComponent(std::string lbl = {}, std::vector<std::string> opts = {},
-                      int* bound_index = nullptr,
+                      std::function<int()> getter = {},
+                      std::function<void(int)> setter = {},
                       std::function<void(const std::string&)> callback = {})
     : label(std::move(lbl)),
       options(std::move(opts)),
-      selected_index(bound_index),
+      get_index(std::move(getter)),
+      set_index(std::move(setter)),
       on_select(std::move(callback)) {}
 };
 
@@ -169,6 +187,25 @@ struct UIGroupChildComponent {
 
 struct UINewLineComponent {
   static constexpr std::string_view Name = "UINewLine";
+};
+
+/**
+ * Color selection indices for the fluid scene's dropdowns. Lives on the
+ * simulation root entity so UI state is ECS-resident too.
+ */
+struct UiStateComponent {
+  static constexpr std::string_view Name = "UiState";
+
+  // WHITE, RED, GREEN, BLUE
+  int low_color_index = 3;
+  int mid_color_index = 0;
+  int high_color_index = 1;
+
+  // PURPLE, BLUE, CYAN, GREEN, YELLOW, RED, WHITE
+  int particle_low_color_index = 1;
+  int particle_mid_low_color_index = 2;
+  int particle_mid_high_color_index = 4;
+  int particle_high_color_index = 5;
 };
 
 }  // namespace motrix::engine::components
