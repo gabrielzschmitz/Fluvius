@@ -1,11 +1,18 @@
 // engine/systems/ui_helpers.h
 #pragma once
 
-#include "../../entities/fluid.h"
+#include <cmath>
+
 #include "../components/ui.h"
 #include "../globals.h"
 
 namespace motrix::engine::systems {
+
+// Logical (pre-scale) layout constants shared by every UI draw/layout path.
+constexpr float kTitleBarHeight = 24.f;
+constexpr float kScrollbarWidth = 10.f;
+constexpr float kBaseFontSize = 10.f;
+constexpr float kDropdownOptionHeight = 20.f;
 
 // Scale a rectangle by uiScale
 inline Rectangle ScaleRect(Rectangle rect) {
@@ -27,6 +34,29 @@ inline Rectangle ScaleRectCached(
   return resolved.scaled_rect;
 }
 
+// Resolve a rect and shift it by the window's scroll offset.
+inline Rectangle ScrolledResolvedRect(
+  components::UIResolvedRectComponent& resolved, float scroll_y) {
+  Rectangle rect = ScaleRectCached(resolved);
+  rect.y -= (scroll_y * uiScale);
+  return rect;
+}
+
+// Draw text centered both horizontally and vertically inside a rect.
+inline void DrawCenteredText(const char* text, Rectangle rect, float fontSize,
+                             Color color) {
+  float text_w = MeasureText(text, fontSize);
+  DrawText(text, rect.x + (rect.width - text_w) * 0.5f,
+           rect.y + (rect.height - fontSize) * 0.5f, fontSize, color);
+}
+
+// True when the left mouse button was pressed this frame over `rect` and no
+// other widget has already claimed the click.
+inline bool WasWidgetClicked(const Rectangle& rect, bool input_consumed) {
+  return !input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+         CheckCollisionPointRec(GetMousePosition(), rect);
+}
+
 // Draw a Win95-style box
 inline void DrawWin95Box(Rectangle rect, Color fill) {
   DrawRectangleRec(rect, fill);
@@ -39,22 +69,22 @@ inline void DrawWin95Box(Rectangle rect, Color fill) {
 }
 
 inline void DrawWin95Scrollbar(engine::components::UIWindowComponent& win) {
-  if (win.auto_height || win.content_height <= (win.height - 20.f)) return;
+  if (win.auto_height || win.content_height <= (win.height - kTitleBarHeight))
+    return;
 
-  constexpr float title_bar_h = 24.f;
-  float view_h = win.height - title_bar_h;
-  constexpr float scrollbar_w = 10.f;
+  float view_h = win.height - kTitleBarHeight;
   float max_scroll = win.content_height - view_h;
 
-  Rectangle track_rect = {win.position.x + win.width - scrollbar_w,
-                          win.position.y + title_bar_h, scrollbar_w, view_h};
+  Rectangle track_rect = {win.position.x + win.width - kScrollbarWidth,
+                          win.position.y + kTitleBarHeight, kScrollbarWidth,
+                          view_h};
 
   float thumb_h = std::fmax(20.f, view_h * (view_h / win.content_height));
   float scroll_ratio = win.scroll_y / max_scroll;
 
   Rectangle thumb_rect = {
     track_rect.x, track_rect.y + scroll_ratio * (track_rect.height - thumb_h),
-    scrollbar_w, thumb_h};
+    kScrollbarWidth, thumb_h};
 
   Rectangle track_scaled = ScaleRect(track_rect);
   Rectangle thumb_scaled = ScaleRect(thumb_rect);
@@ -142,10 +172,9 @@ inline bool UIConsumesMouse(ECS& ecs, Vector2 mouse_screen) {
 
       auto& win = ecs.get<UIWindowComponent>(layout.parent);
 
-      Rectangle rect = ScaleRectCached(resolved);
-      rect.y -= win.scroll_y * uiScale;
+      Rectangle rect = ScrolledResolvedRect(resolved, win.scroll_y);
 
-      float option_h = 20.f * uiScale;
+      float option_h = kDropdownOptionHeight * uiScale;
 
       Rectangle total_rect{
         rect.x, rect.y, rect.width,
@@ -214,40 +243,6 @@ inline bool IsMouseOverUIRect(ECS& ecs, Rectangle target_rect) {
   if (!CheckCollisionPointRec(mouse, top_rect)) return false;
 
   return CheckCollisionPointRec(mouse, target_rect);
-}
-
-inline void UpdateDensityText(ECS& ecs) {
-  using namespace motrix::engine::components;
-  ecs.group_view<UITextComponent, UILayoutChildComponent>(
-    [&](Entity entity, UITextComponent& text, UILayoutChildComponent& layout) {
-      if (text.text.find("Density:") != std::string::npos) {
-        char buffer[64];
-        snprintf(buffer, sizeof(buffer), "Density: %.6f",
-                 entities::selection_density);
-
-        std::string new_val = buffer;
-
-        if (text.text != new_val) {
-          text.text = new_val;
-
-          layout.preferred_width =
-            static_cast<float>(MeasureText(text.text.c_str(), 10));
-
-          Entity parent_group = layout.parent;
-
-          if (ecs.has<UILayoutChildComponent>(parent_group)) {
-            Entity window_ent =
-              ecs.get<UILayoutChildComponent>(parent_group).parent;
-
-            if (ecs.has<UIWindowComponent>(window_ent)) {
-              ecs.get<UIWindowComponent>(window_ent).layout_dirty = true;
-            }
-          } else if (ecs.has<UIWindowComponent>(parent_group)) {
-            ecs.get<UIWindowComponent>(parent_group).layout_dirty = true;
-          }
-        }
-      }
-    });
 }
 
 }  // namespace motrix::engine::systems

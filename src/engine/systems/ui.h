@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../../app/scene.h"
+#include "../../entities/fluid.h"
 #include "../components/ui.h"
 #include "../ecs/ecs.h"
 #include "raymath.h"
@@ -53,6 +54,36 @@ inline void FlushRow(std::vector<RowItem>& row, float content_width,
   row.clear();
 }
 
+// Measure a layout child and push it onto the current row, flushing the row
+// first when the child does not fit. Shared by group and window layout.
+inline void PlaceRowItem(ECS& ecs, Entity child,
+                         UILayoutChildComponent& layout,
+                         UIResolvedRectComponent& child_rect,
+                         std::vector<RowItem>& row, float content_left,
+                         float content_width, float spacing,
+                         float& cursor_y) {
+  float width = layout.preferred_width;
+  bool full_row = ecs.has<UISliderComponent>(child) || width == -1.f;
+
+  if (full_row) {
+    width = content_width;
+  } else {
+    if (width <= 0.f) width = ResolveIntrinsicWidth(ecs, child);
+    if (width <= 0.f) width = content_width * 0.5f;
+  }
+
+  float row_width = 0.f;
+  for (auto& item : row) row_width += item.width;
+  if (!row.empty()) row_width += (row.size() - 1) * spacing;
+
+  float next_row_width = row_width + width + (row.empty() ? 0.f : spacing);
+
+  if (full_row || next_row_width > content_width)
+    FlushRow(row, content_width, content_left, cursor_y, spacing);
+
+  row.push_back(RowItem{&layout, &child_rect, width});
+}
+
 //
 // Layout
 //
@@ -67,42 +98,21 @@ inline void LayoutGroup(ECS& ecs, Entity group, UIGroupComponent& g,
 
   std::vector<RowItem> group_row;
 
-  ecs.group_view<UIGroupChildComponent, UIResolvedRectComponent,
-                 UILayoutChildComponent>(
-    [&](Entity child, UIGroupChildComponent& gc,
-        UIResolvedRectComponent& child_rect, UILayoutChildComponent& layout) {
-      if (gc.parent_group != group) return;
+  ecs.group_view<UILayoutChildComponent, UIResolvedRectComponent>(
+    [&](Entity child, UILayoutChildComponent& layout,
+        UIResolvedRectComponent& child_rect) {
+      if (!ecs.has<UIGroupChildComponent>(child)) return;
+      if (ecs.get<UIGroupChildComponent>(child).parent_group != group) return;
 
       if (ecs.has<UINewLineComponent>(child)) {
         FlushRow(group_row, inner_content_width, inner_content_left,
                  group_cursor_y, g.spacing);
-        group_cursor_y += 0.f;
         return;
       }
 
-      float width = layout.preferred_width;
-
-      bool full_row = ecs.has<UISliderComponent>(child) || width == -1.f;
-
-      if (full_row) {
-        width = inner_content_width;
-      } else {
-        if (width <= 0.f) width = ResolveIntrinsicWidth(ecs, child);
-        if (width <= 0.f) width = inner_content_width * 0.5f;
-      }
-
-      float row_width = 0.f;
-      for (auto& item : group_row) row_width += item.width;
-      if (!group_row.empty()) row_width += (group_row.size() - 1) * g.spacing;
-
-      float next_row_width =
-        row_width + width + (group_row.empty() ? 0.f : g.spacing);
-
-      if (full_row || next_row_width > inner_content_width)
-        FlushRow(group_row, inner_content_width, inner_content_left,
-                 group_cursor_y, g.spacing);
-
-      group_row.push_back(RowItem{&layout, &child_rect, width});
+      PlaceRowItem(ecs, child, layout, child_rect, group_row,
+                   inner_content_left, inner_content_width, g.spacing,
+                   group_cursor_y);
     });
 
   FlushRow(group_row, inner_content_width, inner_content_left, group_cursor_y,
@@ -132,31 +142,11 @@ inline void LayoutStandaloneChildren(ECS& ecs, Entity window_entity,
 
       if (ecs.has<UINewLineComponent>(child)) {
         FlushRow(row, content_width, content_left, cursor_y, window.gap);
-        cursor_y += 0.f;
         return;
       }
 
-      float width = layout.preferred_width;
-      bool full_row = ecs.has<UISliderComponent>(child) || width == -1.f;
-
-      if (full_row) {
-        width = content_width;
-      } else {
-        if (width <= 0.f) width = ResolveIntrinsicWidth(ecs, child);
-        if (width <= 0.f) width = content_width * 0.5f;
-      }
-
-      float row_width = 0.f;
-      for (auto& item : row) row_width += item.width;
-      if (!row.empty()) row_width += (row.size() - 1) * window.gap;
-
-      float next_row_width =
-        row_width + width + (row.empty() ? 0.f : window.gap);
-
-      if (full_row || next_row_width > content_width)
-        FlushRow(row, content_width, content_left, cursor_y, window.gap);
-
-      row.push_back(RowItem{&layout, &child_rect, width});
+      PlaceRowItem(ecs, child, layout, child_rect, row, content_left,
+                   content_width, window.gap, cursor_y);
     });
 
   FlushRow(row, content_width, content_left, cursor_y, window.gap, false, true);
@@ -167,18 +157,16 @@ inline void LayoutUI(ECS& ecs) {
                                         UIWindowComponent& window) {
     if (!window.layout_dirty) return;
 
-    constexpr float title_h = 24.f;
-    constexpr float scrollbar_w = 10.f;
-
     bool had_scrollbar = !window.auto_height &&
-                         (window.content_height > (window.height - title_h));
+                         (window.content_height >
+                          (window.height - kTitleBarHeight));
 
-    float start_y = window.position.y + window.padding / 2 + title_h;
+    float start_y = window.position.y + window.padding / 2 + kTitleBarHeight;
     float cursor_y = start_y;
     float content_left = window.position.x + window.padding;
     float content_width = window.width - 2.f * window.padding;
 
-    if (!window.auto_height && had_scrollbar) content_width -= scrollbar_w;
+    if (!window.auto_height && had_scrollbar) content_width -= kScrollbarWidth;
 
     size_t group_count = 0;
 
@@ -216,8 +204,9 @@ inline void LayoutUI(ECS& ecs) {
     if (window.auto_height)
       window.height = cursor_y - window.position.y + window.padding;
 
-    bool needs_scrollbar = !window.auto_height &&
-                           (window.content_height > (window.height - title_h));
+bool needs_scrollbar = !window.auto_height &&
+                           (window.content_height >
+                            (window.height - kTitleBarHeight));
 
     if (had_scrollbar != needs_scrollbar)
       window.layout_dirty = true;
@@ -230,34 +219,33 @@ inline void HandleWindowScrolling(ECS& ecs,
                                   engine::components::UIWindowComponent& win) {
   if (win.auto_height) return;
 
-  constexpr float title_bar_h = 24.f;
-  float view_h = win.height - title_bar_h;
+  float view_h = win.height - kTitleBarHeight;
 
   if (win.content_height <= view_h) {
     win.scroll_y = 0.f;
     return;
   }
 
-  constexpr float scrollbar_w = 10.f;
   float max_scroll = win.content_height - view_h;
 
-  Rectangle track_rect = {win.position.x + win.width - scrollbar_w,
-                          win.position.y + title_bar_h, scrollbar_w, view_h};
+  Rectangle track_rect = {win.position.x + win.width - kScrollbarWidth,
+                          win.position.y + kTitleBarHeight, kScrollbarWidth,
+                          view_h};
 
   float thumb_h = std::fmax(10.f, view_h * (view_h / win.content_height));
   float scroll_ratio = win.scroll_y / max_scroll;
 
   Rectangle thumb_rect = {
     track_rect.x, track_rect.y + scroll_ratio * (track_rect.height - thumb_h),
-    scrollbar_w, thumb_h};
+    kScrollbarWidth, thumb_h};
 
   Rectangle track_scaled = ScaleRect(track_rect);
   Rectangle thumb_scaled = ScaleRect(thumb_rect);
   Vector2 mouse_screen = GetMousePosition();
 
-  Rectangle content_rect =
-    ScaleRect({win.position.x, win.position.y + title_bar_h,
-               win.width - scrollbar_w, win.height - title_bar_h});
+  Rectangle content_rect = ScaleRect(
+    {win.position.x, win.position.y + kTitleBarHeight,
+     win.width - kScrollbarWidth, win.height - kTitleBarHeight});
 
   Vector2 mouse = GetMousePosition();
 
@@ -299,8 +287,7 @@ inline void RenderGroups(ECS& ecs, Entity window_entity, float scroll_y) {
                                              UILayoutChildComponent& layout) {
     if (layout.parent != window_entity) return;
 
-    Rectangle r = ScaleRectCached(rect);
-    r.y -= (scroll_y * uiScale);
+    Rectangle r = ScrolledResolvedRect(rect, scroll_y);
 
     DrawRectangleLinesEx(r, 1.f, DARKGRAY);
 
@@ -324,8 +311,7 @@ inline void RenderSliders(ECS& ecs, Entity window_entity, float scroll_y,
     if (!slider.value) return;
 
     float current_val = *slider.value;
-    Rectangle rect = ScaleRectCached(resolved);
-    rect.y -= (scroll_y * uiScale);
+    Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
 
     Rectangle bar{rect.x, rect.y + 14 * uiScale, rect.width, 16 * uiScale};
 
@@ -347,10 +333,11 @@ inline void RenderSliders(ECS& ecs, Entity window_entity, float scroll_y,
 
     DrawWin95Box(knob, LIGHTGRAY);
 
-    bool hit = CheckCollisionPointRec(GetMousePosition(), bar) ||
-               CheckCollisionPointRec(GetMousePosition(), knob);
+    bool hit =
+      WasWidgetClicked(bar, input_consumed) ||
+      WasWidgetClicked(knob, input_consumed);
 
-    if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && hit) {
+    if (hit) {
       slider.dragging = true;
       input_consumed = true;
     }
@@ -376,8 +363,7 @@ inline void RenderCheckboxes(ECS& ecs, Entity window_entity, float scroll_y,
         UIResolvedRectComponent& resolved, UILayoutChildComponent& layout) {
       if (layout.parent != window_entity) return;
 
-      Rectangle rect = ScaleRectCached(resolved);
-      rect.y -= (scroll_y * uiScale);
+      Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
 
       bool is_full_width = (layout.preferred_width == -1.f);
       float fontSize = 10 * uiScale;
@@ -410,8 +396,7 @@ inline void RenderCheckboxes(ECS& ecs, Entity window_entity, float scroll_y,
       DrawText(checkbox.label.c_str(), text_x,
                rect.y + (rect.height - fontSize) * 0.5f, fontSize, BLACK);
 
-      if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
-          CheckCollisionPointRec(GetMousePosition(), rect)) {
+      if (WasWidgetClicked(rect, input_consumed)) {
         *checkbox.value = !(*checkbox.value);
         if (checkbox.on_change) checkbox.on_change(*checkbox.value);
       }
@@ -426,17 +411,13 @@ inline void RenderButtons(ECS& ecs, Entity window_entity, float scroll_y,
                                              UILayoutChildComponent& layout) {
     if (layout.parent != window_entity) return;
 
-    Rectangle rect = ScaleRectCached(resolved);
-    rect.y -= (scroll_y * uiScale);
+    Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
 
     DrawWin95Box(rect, LIGHTGRAY);
-    float fontSize = 10 * uiScale;
-    float text_w = button.text_width * uiScale;
-    DrawText(button.label.c_str(), rect.x + (rect.width - text_w) * 0.5f,
-             rect.y + (rect.height - fontSize) * 0.5f, fontSize, BLACK);
+    float fontSize = kBaseFontSize * uiScale;
+    DrawCenteredText(button.label.c_str(), rect, fontSize, BLACK);
 
-    if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
-        CheckCollisionPointRec(GetMousePosition(), rect))
+    if (WasWidgetClicked(rect, input_consumed))
       if (button.on_click) button.on_click();
   });
 }
@@ -448,12 +429,11 @@ inline void RenderText(ECS& ecs, Entity window_entity, float scroll_y) {
                                              UILayoutChildComponent& layout) {
     if (layout.parent != window_entity) return;
 
-    Rectangle rect = ScaleRectCached(resolved);
-    rect.y -= (scroll_y * uiScale);
+    Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
 
     DrawText(text.text.c_str(), rect.x,
-             rect.y + (rect.height - 10.f * uiScale) * 0.5f, 10 * uiScale,
-             BLACK);
+             rect.y + (rect.height - kBaseFontSize * uiScale) * 0.5f,
+             kBaseFontSize * uiScale, BLACK);
   });
 }
 
@@ -465,8 +445,7 @@ inline void RenderDropdowns(ECS& ecs, Entity window_entity, float scroll_y,
         UIResolvedRectComponent& resolved, UILayoutChildComponent& layout) {
       if (layout.parent != window_entity) return;
 
-      Rectangle rect = ScaleRectCached(resolved);
-      rect.y -= (scroll_y * uiScale);
+      Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
 
       DrawWin95Box(rect, LIGHTGRAY);
 
@@ -474,21 +453,16 @@ inline void RenderDropdowns(ECS& ecs, Entity window_entity, float scroll_y,
       Rectangle arrow_rect = {rect.x + rect.width - arrow_w, rect.y, arrow_w,
                               rect.height};
       DrawWin95Box(arrow_rect, LIGHTGRAY);
-      float arrow_text_w = MeasureText("v", 10 * uiScale);
-
-      DrawText("v", arrow_rect.x + (arrow_rect.width - arrow_text_w) * 0.5f,
-               arrow_rect.y + (arrow_rect.height - 10.f * uiScale) * 0.5f,
-               10 * uiScale, BLACK);
+      DrawCenteredText("v", arrow_rect, kBaseFontSize * uiScale, BLACK);
 
       std::string display =
         dropdown.label + ": " + dropdown.options[*dropdown.selected_index];
       float text_x = rect.x + 4.f * uiScale;
-      float text_y = rect.y + (rect.height - 10.f * uiScale) * 0.5f;
+      float text_y = rect.y + (rect.height - kBaseFontSize * uiScale) * 0.5f;
 
-      DrawText(display.c_str(), text_x, text_y, 10 * uiScale, BLACK);
+      DrawText(display.c_str(), text_x, text_y, kBaseFontSize * uiScale, BLACK);
 
-      if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
-          CheckCollisionPointRec(GetMousePosition(), rect)) {
+      if (WasWidgetClicked(rect, input_consumed)) {
         dropdown.expanded = !dropdown.expanded;
         input_consumed = true;
       }
@@ -504,9 +478,8 @@ inline void RenderDropdownLists(ECS& ecs, Entity window_entity, float scroll_y,
                                              UILayoutChildComponent& layout) {
     if (layout.parent != window_entity || !dropdown.expanded) return;
 
-    Rectangle rect = ScaleRectCached(resolved);
-    rect.y -= (scroll_y * uiScale);
-    float option_h = 20.f * uiScale;
+    Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
+    float option_h = kDropdownOptionHeight * uiScale;
 
     for (size_t i = 0; i < dropdown.options.size(); ++i) {
       Rectangle option_rect{rect.x, rect.y + rect.height + i * option_h,
@@ -538,10 +511,9 @@ inline void PrepassDropdownInput(ECS& ecs, bool& input_consumed) {
 
       auto& window = ecs.get<UIWindowComponent>(layout.parent);
 
-      Rectangle rect = ScaleRectCached(resolved);
-      rect.y -= (window.scroll_y * uiScale);
+      Rectangle rect = ScrolledResolvedRect(resolved, window.scroll_y);
 
-      float option_h = 20.f * uiScale;
+      float option_h = kDropdownOptionHeight * uiScale;
 
       for (size_t i = 0; i < dropdown.options.size(); ++i) {
         Rectangle option_rect{rect.x, rect.y + rect.height + i * option_h,
@@ -572,11 +544,11 @@ inline void RenderTooltips(ECS& ecs, float scroll_y, bool input_consumed) {
   float dt = GetFrameTime();
   std::string tooltip_to_draw = "";
 
-  ecs.view<components::UITooltipComponent, components::UIResolvedRectComponent>(
+  ecs.group_view<components::UITooltipComponent,
+               components::UIResolvedRectComponent>(
     [&](Entity e, components::UITooltipComponent& tooltip,
         components::UIResolvedRectComponent& resolved) {
-      Rectangle rect = ScaleRectCached(resolved);
-      rect.y -= (scroll_y * uiScale);
+      Rectangle rect = ScrolledResolvedRect(resolved, scroll_y);
       bool is_hovering = !input_consumed && IsMouseOverUIRect(ecs, rect);
       if (is_hovering) {
         tooltip.hover_timer += dt;
@@ -649,19 +621,16 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed,
                            restore_btn.height - (margin * 2)};
       DrawRectangleLinesEx(inner_rect, 1.f * uiScale, BLACK);
 
-      if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-        if (CheckCollisionPointRec(mouse, restore_btn)) {
-          window.minimized = false;
-          window.layout_dirty = true;
-          input_consumed = true;
-        }
+      if (WasWidgetClicked(restore_btn, input_consumed)) {
+        window.minimized = false;
+        window.layout_dirty = true;
+        input_consumed = true;
       }
 
       return;
     }
 
-    constexpr float title_h_logical = 24.f;
-    const float title_h_scaled = title_h_logical * uiScale;
+    const float title_h_scaled = kTitleBarHeight * uiScale;
     const float border = 2.f * uiScale;
 
     Rectangle rect = ScaleRect(
@@ -676,21 +645,19 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed,
     Rectangle title_bar = {rect.x + border, rect.y + border,
                            rect.width - (border * 2), title_h_scaled - border};
 
-    if (!input_consumed && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-      if (CheckCollisionPointRec(mouse, close_button)) {
-        window.close_requested = true;
-        input_consumed = true;
-      } else if (CheckCollisionPointRec(mouse, minimize_button)) {
-        window.minimized = !window.minimized;
-        window.layout_dirty = true;
-        input_consumed = true;
-      } else if (CheckCollisionPointRec(mouse, title_bar)) {
-        window.dragging = true;
-        window.layout_dirty = true;
-        window.drag_offset = {(mouse.x / uiScale) - window.position.x,
-                              (mouse.y / uiScale) - window.position.y};
-        input_consumed = true;
-      }
+    if (WasWidgetClicked(close_button, input_consumed)) {
+      window.close_requested = true;
+      input_consumed = true;
+    } else if (WasWidgetClicked(minimize_button, input_consumed)) {
+      window.minimized = !window.minimized;
+      window.layout_dirty = true;
+      input_consumed = true;
+    } else if (WasWidgetClicked(title_bar, input_consumed)) {
+      window.dragging = true;
+      window.layout_dirty = true;
+      window.drag_offset = {(mouse.x / uiScale) - window.position.x,
+                            (mouse.y / uiScale) - window.position.y};
+      input_consumed = true;
     }
 
     if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) window.dragging = false;
@@ -706,23 +673,11 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed,
              13 * uiScale, WHITE);
 
     DrawWin95Box(minimize_button, LIGHTGRAY);
-    float fontSize = 10.f * uiScale;
-
-    int minTextWidth = MeasureText("_", (int)fontSize);
-    float min_x_offset = (minimize_button.width - (float)minTextWidth) / 2.f;
-    float min_y_offset = (minimize_button.height - fontSize) / 2.f;
-    DrawText("_", minimize_button.x + min_x_offset,
-             minimize_button.y + min_y_offset, (int)fontSize, BLACK);
+    float fontSize = kBaseFontSize * uiScale;
+    DrawCenteredText("_", minimize_button, fontSize, BLACK);
 
     DrawWin95Box(close_button, LIGHTGRAY);
-
-    int textWidth = MeasureText("X", (int)fontSize);
-
-    float x_offset = (close_button.width - (float)textWidth) / 2.f;
-    float y_offset = (close_button.height - fontSize) / 2.f;
-
-    DrawText("X", close_button.x + x_offset, close_button.y + y_offset,
-             (int)fontSize, BLACK);
+    DrawCenteredText("X", close_button, fontSize, BLACK);
 
     if (window.close_requested) {
       std::vector<Entity> to_destroy;
@@ -754,8 +709,8 @@ inline void RenderWindow(ECS& ecs, bool& input_consumed,
     DrawWin95Scrollbar(window);
 
     bool has_scrollbar =
-      (window.content_height > (window.height - title_h_logical));
-    float scrollbar_w_scaled = has_scrollbar ? (10.f * uiScale) : 0.f;
+      (window.content_height > (window.height - kTitleBarHeight));
+    float scrollbar_w_scaled = has_scrollbar ? (kScrollbarWidth * uiScale) : 0.f;
 
     Rectangle content_area = {rect.x + border, rect.y + title_h_scaled,
                               rect.width - (border * 2) - scrollbar_w_scaled,
@@ -790,6 +745,41 @@ inline void RenderUI(ECS& ecs, motrix::app::SceneType sceneType =
   PrepassDropdownInput(ecs, input_consumed);
 
   RenderWindow(ecs, input_consumed, sceneType);
+}
+
+// Refresh the density readout text whenever the selection density changes.
+inline void UpdateDensityText(ECS& ecs) {
+  using namespace motrix::engine::components;
+  ecs.group_view<UITextComponent, UILayoutChildComponent>(
+    [&](Entity entity, UITextComponent& text, UILayoutChildComponent& layout) {
+      if (text.text.find("Density:") != std::string::npos) {
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "Density: %.6f",
+                 entities::selection_density);
+
+        std::string new_val = buffer;
+
+        if (text.text != new_val) {
+          text.text = new_val;
+
+          layout.preferred_width =
+            static_cast<float>(MeasureText(text.text.c_str(), 10));
+
+          Entity parent_group = layout.parent;
+
+          if (ecs.has<UILayoutChildComponent>(parent_group)) {
+            Entity window_ent =
+              ecs.get<UILayoutChildComponent>(parent_group).parent;
+
+            if (ecs.has<UIWindowComponent>(window_ent)) {
+              ecs.get<UIWindowComponent>(window_ent).layout_dirty = true;
+            }
+          } else if (ecs.has<UIWindowComponent>(parent_group)) {
+            ecs.get<UIWindowComponent>(parent_group).layout_dirty = true;
+          }
+        }
+      }
+    });
 }
 
 }  // namespace motrix::engine::systems
