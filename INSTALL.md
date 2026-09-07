@@ -282,14 +282,14 @@ Example:
 
 ### Maximum Performance Builds
 
-Available via the `--perf` flag (applies to the `fluvius`, `fluvius-bench`
-and `raylib` projects; the release `-O2` baseline is overridden):
+Available via the `--perf` flag (applies to the `fluvius`, `fluvius-bench` and
+`raylib` projects; the release `-O2` baseline is overridden):
 
 - `none` - stock `-O2` (default)
 - `fast` - `-O3 -flto` (portable, numerically identical)
 - `avx2` - `-O3 -flto -mavx2 -mfma -mbmi2` (runs on any AVX2 CPU)
-- `native` - `-O3 -flto -march=native -mtune=native` (best, but the binary
-  only runs on the machine it was built on)
+- `native` - `-O3 -flto -march=native -mtune=native` (best, but the binary only
+  runs on the machine it was built on)
 
 Example:
 ```bash
@@ -308,9 +308,9 @@ make -j$(nproc) config=release_x64
 > phase.
 >
 > `-mfma`/`-march=native` slightly change floating-point rounding (fused
-> multiply-add), producing visually identical results that are not
-> bit-for-bit the same as the default build. Use `--perf=fast` if bit-exact
-> reproducibility matters.
+> multiply-add), producing visually identical results that are not bit-for-bit
+> the same as the default build. Use `--perf=fast` if bit-exact reproducibility
+> matters.
 >
 > There is deliberately no `-ffast-math` preset: it would break the SPH
 > kernels' ordered-compare/NaN mask semantics.
