@@ -89,7 +89,7 @@ class ThreadPool {
     if (effective <= 1) {
       seed.start = 0;
       seed.end = static_cast<int>(n);
-      fn(&seed);
+      fn(&seed, 0);
       return;
     }
 
@@ -110,7 +110,7 @@ class ThreadPool {
       Worker& w = *workers_[i];
       {
         std::lock_guard<std::mutex> lock(w.mutex);
-        w.job = [i, &tasks, fn] { fn(&tasks[i]); };
+        w.job = [i, &tasks, fn] { fn(&tasks[i], i); };
         w.wake = true;
         w.done.store(false, std::memory_order_relaxed);
       }

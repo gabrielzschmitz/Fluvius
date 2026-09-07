@@ -94,12 +94,22 @@ struct PhysicsBuffers {
   std::vector<components::CircleComponent*> circ_cache;
   bool particle_entities_cached = false;
 
-  // Flat uniform grid (dense, indexed by cy*cols+cx). Rebuilt every step;
-  // vector capacities are reused across steps so no per-frame allocation.
+  // Uniform grid built by counting sort (see BuildSpatialGrid). grid_particles
+  // packs, for each cell c, the particle indices in [grid_start[c],
+  // grid_start[c+1]); the runs are concatenated so neighbor sweeps stream
+  // linearly. Invariant: sum(grid_counts) == particle count for the step.
   int grid_cols = 0;
   int grid_rows = 0;
   float grid_cell_size = 0.f;
-  std::vector<std::vector<size_t>> grid_cells;
+  int grid_cell_count = 0;
+  std::vector<int> grid_counts;
+  std::vector<int> grid_start;
+  std::vector<size_t> grid_particles;
+
+  // Per-worker histograms and scatter offsets for the parallel grid build
+  // (row w is [w*cell_count + c]). Sized to num_threads at build time.
+  std::vector<int> grid_hist;
+  std::vector<int> grid_base;
 
   // Uniform grid used by the particle-particle collision pass (finer cell
   // size than the SPH grid). Persistent for the same reason.
@@ -172,23 +182,116 @@ inline void BuildSpatialGrid(PhysicsBuffers& pb, float h) {
 
   int cols = GridCellCountX(h);
   int rows = GridCellCountY(h);
+  int cell_count = cols * rows;
+  size_t n = pb.predicted_positions.size();
 
   if (pb.grid_cols != cols || pb.grid_rows != rows ||
-      pb.grid_cell_size != h) {
-    pb.grid_cells.assign(static_cast<size_t>(cols) * rows, {});
+      pb.grid_cell_size != h || pb.grid_cell_count != cell_count) {
+    pb.grid_counts.assign(static_cast<size_t>(cell_count), 0);
+    pb.grid_start.assign(static_cast<size_t>(cell_count) + 1, 0);
+    pb.grid_cell_count = cell_count;
     pb.grid_cols = cols;
     pb.grid_rows = rows;
     pb.grid_cell_size = h;
   }
-
-  for (auto& cell : pb.grid_cells) cell.clear();
-
-  for (size_t i = 0; i < pb.predicted_positions.size(); ++i) {
-    int cx;
-    int cy;
-    PositionToFlatCell(pb.predicted_positions[i], h, cols, rows, cx, cy);
-    pb.grid_cells[cy * cols + cx].push_back(i);
+  int workers = num_threads > 0 ? num_threads : 1;
+  if (static_cast<size_t>(workers) * cell_count != pb.grid_hist.size()) {
+    pb.grid_hist.assign(static_cast<size_t>(workers) * cell_count, 0);
+    pb.grid_base.assign(static_cast<size_t>(workers) * cell_count, 0);
   }
+  pb.grid_particles.resize(n);
+
+  std::fill(pb.grid_hist.begin(), pb.grid_hist.end(), 0);
+
+  int effective = GetEffectiveThreads(n);
+  int row_stride = cell_count;
+
+  struct GridCountTask {
+    int start;
+    int end;
+    int cols;
+    int rows;
+    int cell_count;
+    float h;
+    int row_stride;
+    size_t n;
+    std::vector<Vector2>* positions;
+    std::vector<int>* hist;
+  };
+  GridCountTask count_seed{0, 0, cols, rows, cell_count, h, row_stride, n,
+                           &pb.predicted_positions, &pb.grid_hist};
+  RunParallelChunks(effective, n, count_seed, [](void* arg, int thread) -> void* {
+    auto* tk = static_cast<GridCountTask*>(arg);
+    int cell_count = tk->cell_count;
+    std::vector<int>& hist = *tk->hist;
+    int* row = hist.data() + static_cast<size_t>(thread) * cell_count;
+    const std::vector<Vector2>& positions = *tk->positions;
+
+    int cols = tk->cols;
+    int rows = tk->rows;
+    float h = tk->h;
+
+    for (int i = tk->start; i < tk->end; ++i) {
+      int cx;
+      int cy;
+      PositionToFlatCell(positions[i], h, cols, rows, cx, cy);
+      ++row[cy * cols + cx];
+    }
+    return nullptr;
+  });
+
+  // Serial prefix-sum merge: per-cell totals plus each worker's scatter base.
+  int total = 0;
+  for (int c = 0; c < cell_count; ++c) {
+    int sum = 0;
+    for (int w = 0; w < workers; ++w) {
+      int* hw = pb.grid_hist.data() + static_cast<size_t>(w) * cell_count;
+      pb.grid_base[static_cast<size_t>(w) * cell_count + c] = total + sum;
+      sum += hw[c];
+    }
+    pb.grid_counts[c] = sum;
+    pb.grid_start[c] = total;
+    total += sum;
+  }
+  pb.grid_start[cell_count] = total;
+
+  struct GridScatterTask {
+    int start;
+    int end;
+    int cols;
+    int rows;
+    int cell_count;
+    float h;
+    int row_stride;
+    size_t n;
+    std::vector<Vector2>* positions;
+    std::vector<size_t>* packed;
+    std::vector<int>* base;
+  };
+  GridScatterTask scatter_seed{0, 0, cols, rows, cell_count, h, row_stride, n,
+                               &pb.predicted_positions, &pb.grid_particles,
+                               &pb.grid_base};
+  RunParallelChunks(effective, n, scatter_seed,
+                    [](void* arg, int thread) -> void* {
+    auto* tk = static_cast<GridScatterTask*>(arg);
+    int cell_count = tk->cell_count;
+    int cols = tk->cols;
+    int rows = tk->rows;
+    float h = tk->h;
+    const std::vector<Vector2>& positions = *tk->positions;
+    std::vector<size_t>& packed = *tk->packed;
+    int* base_row = tk->base->data() + static_cast<size_t>(thread) * cell_count;
+
+    for (int i = tk->start; i < tk->end; ++i) {
+      int cx;
+      int cy;
+      PositionToFlatCell(positions[i], h, cols, rows, cx, cy);
+      int& cursor = base_row[cy * cols + cx];
+      packed[cursor] = static_cast<size_t>(i);
+      ++cursor;
+    }
+    return nullptr;
+  });
 }
 
 inline void UpdateKernelCache(PhysicsBuffers& pb, float gravity) {
@@ -223,7 +326,7 @@ inline void PredictPositions(ECS& ecs, PhysicsBuffers& pb, float dt) {
     PhysicsBuffers* pb;
   };
   PredictTask seed{0, static_cast<int>(n), gravity, dt, &pb};
-  RunParallelChunks(GetEffectiveThreads(n), n, seed, [](void* arg) -> void* {
+  RunParallelChunks(GetEffectiveThreads(n), n, seed, [](void* arg, int) -> void* {
     auto* tk = static_cast<PredictTask*>(arg);
     for (int i = tk->start; i < tk->end; ++i) {
       tk->pb->vel_cache[i]->velocity.y += tk->grav * tk->dt;
@@ -256,7 +359,7 @@ struct DensityTask {
   PhysicsBuffers* pb;
 };
 
-inline void* ComputeDensityRange(void* arg) {
+inline void* ComputeDensityRange(void* arg, int) {
   auto* task = static_cast<DensityTask*>(arg);
   const int start = task->start;
   const int end = task->end;
@@ -288,7 +391,9 @@ inline void* ComputeDensityRange(void* arg) {
         int ny = cy + dy;
         if (ny < 0 || ny >= rows) continue;
 
-        for (size_t j : pb.grid_cells[ny * cols + nx]) {
+        int cell = ny * cols + nx;
+        for (int k = pb.grid_start[cell]; k < pb.grid_start[cell + 1]; ++k) {
+          size_t j = pb.grid_particles[k];
           Vector2 p2 = pb.predicted_positions[j];
 
           float rx = p2.x - p.x;
@@ -323,7 +428,7 @@ struct ForceTask {
   PhysicsBuffers* pb;
 };
 
-inline void* ComputePressureForceRange(void* arg) {
+inline void* ComputePressureForceRange(void* arg, int) {
   auto* task = static_cast<ForceTask*>(arg);
   const int start = task->start;
   const int end = task->end;
@@ -359,7 +464,9 @@ inline void* ComputePressureForceRange(void* arg) {
         int ny = cy + dy;
         if (ny < 0 || ny >= rows) continue;
 
-        for (size_t j : pb.grid_cells[ny * cols + nx]) {
+        int cell = ny * cols + nx;
+        for (int k = pb.grid_start[cell]; k < pb.grid_start[cell + 1]; ++k) {
+          size_t j = pb.grid_particles[k];
           if (i == j) continue;
 
           Vector2 p2 = pb.predicted_positions[j];
@@ -426,7 +533,7 @@ struct ApplyTask {
 // Fused integration pass: applies pressure/viscosity/cohesion to velocity,
 // advances positions, resets the radius and applies velocity damping — one
 // loop instead of the previous three independent full-array walks.
-inline void* ApplyFluidForcesRange(void* arg) {
+inline void* ApplyFluidForcesRange(void* arg, int) {
   auto* task = static_cast<ApplyTask*>(arg);
   const float dt = task->dt;
   const float viscosity = task->viscosity;
