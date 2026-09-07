@@ -2,7 +2,9 @@
 #pragma once
 
 #include <cfloat>
+#include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 
 #include "../../entities/fluid.h"
@@ -106,6 +108,21 @@ struct PhysicsBuffers {
   std::vector<int> grid_start;
   std::vector<size_t> grid_particles;
 
+  // Cell-sorted soa copies of the per-particle hot data, produced by the
+  // grid scatter, so neighbor loops stream contiguous floats instead of
+  // random-access gather by unpredictable index. sorted data at position k
+  // belongs to the same particle whose id is grid_particles[k].
+  std::vector<float> sorted_px;
+  std::vector<float> sorted_py;
+  std::vector<float> sorted_dens;
+  std::vector<float> sorted_press;
+  std::vector<float> sorted_vx;
+  std::vector<float> sorted_vy;
+
+  // Inverse scatter map used to skip the self term: id_to_sorted[i] is the
+  // sorted position of particle i in the current grid.
+  std::vector<int> id_to_sorted;
+
   // Per-worker histograms and scatter offsets for the parallel grid build
   // (row w is [w*cell_count + c]). Sized to num_threads at build time.
   std::vector<int> grid_hist;
@@ -200,6 +217,13 @@ inline void BuildSpatialGrid(PhysicsBuffers& pb, float h) {
     pb.grid_base.assign(static_cast<size_t>(workers) * cell_count, 0);
   }
   pb.grid_particles.resize(n);
+  pb.sorted_px.resize(n);
+  pb.sorted_py.resize(n);
+  pb.sorted_dens.resize(n);
+  pb.sorted_press.resize(n);
+  pb.sorted_vx.resize(n);
+  pb.sorted_vy.resize(n);
+  pb.id_to_sorted.resize(n);
 
   std::fill(pb.grid_hist.begin(), pb.grid_hist.end(), 0);
 
@@ -267,10 +291,14 @@ inline void BuildSpatialGrid(PhysicsBuffers& pb, float h) {
     std::vector<Vector2>* positions;
     std::vector<size_t>* packed;
     std::vector<int>* base;
+    std::vector<float>* spx;
+    std::vector<float>* spy;
+    std::vector<int>* id_to_sorted;
   };
   GridScatterTask scatter_seed{0, 0, cols, rows, cell_count, h, row_stride, n,
                                &pb.predicted_positions, &pb.grid_particles,
-                               &pb.grid_base};
+                               &pb.grid_base, &pb.sorted_px, &pb.sorted_py,
+                               &pb.id_to_sorted};
   RunParallelChunks(effective, n, scatter_seed,
                     [](void* arg, int thread) -> void* {
     auto* tk = static_cast<GridScatterTask*>(arg);
@@ -287,8 +315,48 @@ inline void BuildSpatialGrid(PhysicsBuffers& pb, float h) {
       int cy;
       PositionToFlatCell(positions[i], h, cols, rows, cx, cy);
       int& cursor = base_row[cy * cols + cx];
-      packed[cursor] = static_cast<size_t>(i);
+      int k = cursor;
+      packed[static_cast<size_t>(k)] = static_cast<size_t>(i);
+      (*tk->spx)[static_cast<size_t>(k)] = positions[i].x;
+      (*tk->spy)[static_cast<size_t>(k)] = positions[i].y;
+      (*tk->id_to_sorted)[i] = k;
       ++cursor;
+    }
+    return nullptr;
+  });
+
+  // Gather the remaining per-particle hot data into sorted order so the
+  // force kernel reads nothing by unpredictable index.
+  struct GatherTask {
+    int start;
+    int end;
+    size_t n;
+    std::vector<int>* id_to_sorted;
+    std::vector<Vector2>* velocities;
+    std::vector<float>* densities;
+    std::vector<float>* pressures;
+    std::vector<float>* svx;
+    std::vector<float>* svy;
+    std::vector<float>* sdens;
+    std::vector<float>* spress;
+  };
+  GatherTask gather_seed{0, 0, n, &pb.id_to_sorted, &pb.velocities,
+                         &pb.densities, &pb.pressures, &pb.sorted_vx,
+                         &pb.sorted_vy, &pb.sorted_dens, &pb.sorted_press};
+  RunParallelChunks(effective, n, gather_seed, [](void* arg, int) -> void* {
+    auto* tk = static_cast<GatherTask*>(arg);
+    const std::vector<int>& map = *tk->id_to_sorted;
+    const std::vector<Vector2>& velocities = *tk->velocities;
+    const std::vector<float>& densities = *tk->densities;
+    const std::vector<float>& pressures = *tk->pressures;
+
+    for (int i = tk->start; i < tk->end; ++i) {
+      int k = map[static_cast<size_t>(i)];
+      (*tk->svx)[static_cast<size_t>(k)] = velocities[static_cast<size_t>(i)].x;
+      (*tk->svy)[static_cast<size_t>(k)] = velocities[static_cast<size_t>(i)].y;
+      (*tk->sdens)[static_cast<size_t>(k)] = densities[static_cast<size_t>(i)];
+      (*tk->spress)[static_cast<size_t>(k)] =
+        pressures[static_cast<size_t>(i)];
     }
     return nullptr;
   });
@@ -317,6 +385,8 @@ inline void PredictPositions(ECS& ecs, PhysicsBuffers& pb, float dt) {
   float gravity = pb.cached_gravity_accel;
   size_t n = pb.particle_entities.size();
   pb.velocities.resize(n);
+  pb.densities.resize(n);
+  pb.pressures.resize(n);
 
   struct PredictTask {
     int start;
@@ -393,11 +463,11 @@ inline void* ComputeDensityRange(void* arg, int) {
 
         int cell = ny * cols + nx;
         for (int k = pb.grid_start[cell]; k < pb.grid_start[cell + 1]; ++k) {
-          size_t j = pb.grid_particles[k];
-          Vector2 p2 = pb.predicted_positions[j];
+          float p2x = pb.sorted_px[k];
+          float p2y = pb.sorted_py[k];
 
-          float rx = p2.x - p.x;
-          float ry = p2.y - p.y;
+          float rx = p2x - p.x;
+          float ry = p2y - p.y;
 
           float r2 = rx * rx + ry * ry;
 
@@ -406,13 +476,131 @@ inline void* ComputeDensityRange(void* arg, int) {
       }
     }
 
+    float pressure = (density - target_density) * pressure_multiplier;
     pb.circ_cache[i]->density = density;
     pb.densities[i] = density;
-    pb.pressures[i] = (density - target_density) * pressure_multiplier;
+    pb.pressures[i] = pressure;
+
+    int k_self = pb.id_to_sorted[i];
+    pb.sorted_dens[k_self] = density;
+    pb.sorted_press[k_self] = pressure;
   }
 
   return nullptr;
 }
+
+// AVX2 density pass. The sorted grid hands us contiguous per-cell position
+// runs, so the inner neighbor loop reduces to 8-wide squared-distance +
+// masked Poly6 accumulation with no per-neighbor scalar loads. Compiled for
+// AVX2 regardless of the global flag set, but only selected when the CPU
+// actually supports it (see ComputeParticleDensity).
+#if defined(__x86_64__) && defined(__GNUC__) || defined(__clang__)
+#pragma GCC push_options
+#pragma GCC target("avx2")
+#include <immintrin.h>
+inline bool Avx2DensityAvailable() {
+  return __builtin_cpu_supports("avx2");
+}
+
+// Debugging nail for A/B-ing the SIMD kernels without a rebuild.
+inline bool NoAvx2ForDebug() {
+  const char* v = std::getenv("FLUVIUS_NO_AVX2");
+  return v && v[0] == '1';
+}
+
+inline void* ComputeDensityRangeAvx2(void* arg, int) {
+  auto* task = static_cast<DensityTask*>(arg);
+  const int start = task->start;
+  const int end = task->end;
+
+  const float h = task->h;
+  const float h2 = h * h;
+  const float mass = task->mass;
+  const float target_density = task->target_density;
+  const float pressure_multiplier = task->pressure_multiplier;
+  PhysicsBuffers& pb = *task->pb;
+
+  const int cols = pb.grid_cols;
+  const int rows = pb.grid_rows;
+  const float* px = pb.sorted_px.data();
+  const float* py = pb.sorted_py.data();
+
+  // 315 / (64 * PI * h^9), folded with mass so each lane does mul-by-const.
+  const float poly6_scale = (315.f / (64.f * PI)) * (1.f / (h2 * h2 * h2 * h2)) *
+                            (1.f / h) * mass;
+  const __m256 h2v = _mm256_set1_ps(h2);
+  const __m256 scalev = _mm256_set1_ps(poly6_scale);
+
+  for (int i = start; i < end && i < static_cast<int>(pb.particle_entities.size());
+       ++i) {
+    Vector2 p = pb.predicted_positions[i];
+
+    int cx;
+    int cy;
+    PositionToFlatCell(p, h, cols, rows, cx, cy);
+
+    __m256 pxv = _mm256_set1_ps(p.x);
+    __m256 pyv = _mm256_set1_ps(p.y);
+    __m256 acc = _mm256_setzero_ps();
+
+    for (int dx = -1; dx <= 1; ++dx) {
+      int nx = cx + dx;
+      if (nx < 0 || nx >= cols) continue;
+      for (int dy = -1; dy <= 1; ++dy) {
+        int ny = cy + dy;
+        if (ny < 0 || ny >= rows) continue;
+
+        int cell = ny * cols + nx;
+        int k0 = pb.grid_start[cell];
+        int k1 = pb.grid_start[cell + 1];
+
+        int k = k0;
+        for (; k + 8 <= k1; k += 8) {
+          __m256 sx = _mm256_loadu_ps(px + k);
+          __m256 sy = _mm256_loadu_ps(py + k);
+          __m256 rx = _mm256_sub_ps(sx, pxv);
+          __m256 ry = _mm256_sub_ps(sy, pyv);
+          __m256 r2 = _mm256_add_ps(_mm256_mul_ps(rx, rx),
+                                    _mm256_mul_ps(ry, ry));
+          __m256 mask = _mm256_cmp_ps(r2, h2v, _CMP_LE_OQ);
+          __m256 diff = _mm256_sub_ps(h2v, r2);
+          __m256 diff2 = _mm256_mul_ps(diff, diff);
+          __m256 diff3 = _mm256_mul_ps(diff2, diff);
+          __m256 contrib = _mm256_mul_ps(scalev, diff3);
+          contrib = _mm256_and_ps(contrib, mask);
+          acc = _mm256_add_ps(acc, contrib);
+        }
+
+        for (; k < k1; ++k) {
+          float rx = px[k] - p.x;
+          float ry = py[k] - p.y;
+          float r2 = rx * rx + ry * ry;
+          if (r2 <= h2) acc = _mm256_add_ps(acc, _mm256_set1_ps(mass * Poly6Kernel(r2, h)));
+        }
+      }
+    }
+
+    __m128 lo = _mm256_castps256_ps128(acc);
+    __m128 hi = _mm256_extractf128_ps(acc, 1);
+    __m128 s = _mm_add_ps(lo, hi);
+    s = _mm_hadd_ps(s, s);
+    s = _mm_hadd_ps(s, s);
+    float density = _mm_cvtss_f32(s);
+
+    float pressure = (density - target_density) * pressure_multiplier;
+    pb.circ_cache[i]->density = density;
+    pb.densities[i] = density;
+    pb.pressures[i] = pressure;
+
+    int k_self = pb.id_to_sorted[i];
+    pb.sorted_dens[k_self] = density;
+    pb.sorted_press[k_self] = pressure;
+  }
+
+  return nullptr;
+}
+#pragma GCC pop_options
+#endif
 
 /**
  * ============================================================================
@@ -453,6 +641,10 @@ inline void* ComputePressureForceRange(void* arg, int) {
     float p1_pressure = pb.pressures[i];
     Vector2 v1 = pb.velocities[i];
 
+    // p_pressure/d^2 of the center particle is shared by every neighbor.
+    float p1_term = p1_pressure / (d1 * d1);
+    int k_self = pb.id_to_sorted[i];
+
     Vector2 pressure_force{0.f, 0.f};
     Vector2 viscosity_force{0.f, 0.f};
     Vector2 cohesion_force{0.f, 0.f};
@@ -466,29 +658,31 @@ inline void* ComputePressureForceRange(void* arg, int) {
 
         int cell = ny * cols + nx;
         for (int k = pb.grid_start[cell]; k < pb.grid_start[cell + 1]; ++k) {
-          size_t j = pb.grid_particles[k];
-          if (i == j) continue;
+          if (k == k_self) continue;
 
-          Vector2 p2 = pb.predicted_positions[j];
+          float p2x = pb.sorted_px[k];
+          float p2y = pb.sorted_py[k];
 
-          float rx = p1.x - p2.x;
-          float ry = p1.y - p2.y;
+          float rx = p1.x - p2x;
+          float ry = p1.y - p2y;
 
           float r2 = rx * rx + ry * ry;
 
           if (r2 <= 0.f || r2 > h2) continue;
 
           float r = sqrtf(r2);
+          float inv_r = 1.f / r;
 
-          Vector2 dir{rx / r, ry / r};
+          Vector2 dir{rx * inv_r, ry * inv_r};
 
           float grad = SpikyKernelGradient(r, h);
 
-          float d2 = pb.densities[j];
-          float p2_pressure = pb.pressures[j];
-          Vector2 v2 = pb.velocities[j];
+          float d2 = pb.sorted_dens[k];
+          float p2_pressure = pb.sorted_press[k];
+          float v2x = pb.sorted_vx[k];
+          float v2y = pb.sorted_vy[k];
 
-          float term = (p1_pressure / (d1 * d1)) + (p2_pressure / (d2 * d2));
+          float term = p1_term + (p2_pressure / (d2 * d2));
 
           float factor = -mass * term * grad;
 
@@ -497,8 +691,8 @@ inline void* ComputePressureForceRange(void* arg, int) {
 
           float visc = ViscosityKernel(r, h);
 
-          viscosity_force.x += (v2.x - v1.x) * visc;
-          viscosity_force.y += (v2.y - v1.y) * visc;
+          viscosity_force.x += (v2x - v1.x) * visc;
+          viscosity_force.y += (v2y - v1.y) * visc;
 
           float cohes = CohesionKernel(r, h);
           cohesion_force.x += dir.x * cohes;
@@ -517,6 +711,195 @@ inline void* ComputePressureForceRange(void* arg, int) {
 
   return nullptr;
 }
+
+// AVX2 force pass: the same counting-sort runs plus sorted soa neighbor data
+// let 8 pairs evaluate per iteration. The r2 > 0 test naturally excludes the
+// self term, and masked lanes are forced to +0.0 bitwise to avoid any
+// NaN/inf propagation from the reciprocal of a zero-distance lane.
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+#pragma GCC target("avx2")
+inline bool Avx2ForceAvailable() {
+  return __builtin_cpu_supports("avx2");
+}
+
+inline void* ComputePressureForceRangeAvx2(void* arg, int) {
+  auto* task = static_cast<ForceTask*>(arg);
+  const int start = task->start;
+  const int end = task->end;
+
+  const float h = task->h;
+  const float h2 = h * h;
+  const float mass = task->mass;
+  PhysicsBuffers& pb = *task->pb;
+
+  const int cols = pb.grid_cols;
+  const int rows = pb.grid_rows;
+  const float* px = pb.sorted_px.data();
+  const float* py = pb.sorted_py.data();
+  const float* dens = pb.sorted_dens.data();
+  const float* press = pb.sorted_press.data();
+  const float* vx = pb.sorted_vx.data();
+  const float* vy = pb.sorted_vy.data();
+
+  const float h5 = h * h * h * h * h;
+  const __m256 h2v = _mm256_set1_ps(h2);
+  const __m256 spiky_scale = _mm256_set1_ps(-15.f / (PI * h5));
+  const __m256 visc_scale = _mm256_set1_ps(15.f / (2.f * PI * h5));
+  const __m256 inv_half_h = _mm256_set1_ps(2.f / h);
+  const __m256 minus_mass = _mm256_set1_ps(-mass);
+
+  for (int i = start; i < end && i < static_cast<int>(pb.particle_entities.size());
+       ++i) {
+    Vector2 p1 = pb.predicted_positions[i];
+
+    int cx;
+    int cy;
+    PositionToFlatCell(p1, h, cols, rows, cx, cy);
+
+    float d1 = pb.densities[i];
+    float p1_pressure = pb.pressures[i];
+    float v1x = pb.velocities[i].x;
+    float v1y = pb.velocities[i].y;
+
+    float p1_term = p1_pressure / (d1 * d1);
+
+    __m256 pxv = _mm256_set1_ps(p1.x);
+    __m256 pyv = _mm256_set1_ps(p1.y);
+    __m256 p1_termv = _mm256_set1_ps(p1_term);
+    __m256 v1xv = _mm256_set1_ps(v1x);
+    __m256 v1yv = _mm256_set1_ps(v1y);
+
+    __m256 pfx = _mm256_setzero_ps();
+    __m256 pfy = _mm256_setzero_ps();
+    __m256 vfx = _mm256_setzero_ps();
+    __m256 vfy = _mm256_setzero_ps();
+    __m256 cfx = _mm256_setzero_ps();
+    __m256 cfy = _mm256_setzero_ps();
+
+    for (int dx = -1; dx <= 1; ++dx) {
+      int nx = cx + dx;
+      if (nx < 0 || nx >= cols) continue;
+      for (int dy = -1; dy <= 1; ++dy) {
+        int ny = cy + dy;
+        if (ny < 0 || ny >= rows) continue;
+
+        int cell = ny * cols + nx;
+        int k0 = pb.grid_start[cell];
+        int k1 = pb.grid_start[cell + 1];
+
+        int k = k0;
+        for (; k + 8 <= k1; k += 8) {
+          __m256 sx = _mm256_loadu_ps(px + k);
+          __m256 sy = _mm256_loadu_ps(py + k);
+
+          __m256 rx = _mm256_sub_ps(pxv, sx);
+          __m256 ry = _mm256_sub_ps(pyv, sy);
+          __m256 r2 = _mm256_add_ps(_mm256_mul_ps(rx, rx),
+                                    _mm256_mul_ps(ry, ry));
+
+          __m256 in = _mm256_cmp_ps(r2, _mm256_setzero_ps(), _CMP_GT_OQ);
+          __m256 le = _mm256_cmp_ps(r2, h2v, _CMP_LE_OQ);
+          __m256 mask = _mm256_and_ps(in, le);
+
+          __m256 r = _mm256_sqrt_ps(r2);
+          __m256 inv_r = _mm256_div_ps(_mm256_set1_ps(1.f), r);
+
+          __m256 dirx = _mm256_and_ps(_mm256_mul_ps(rx, inv_r), mask);
+          __m256 diry = _mm256_and_ps(_mm256_mul_ps(ry, inv_r), mask);
+
+          __m256 vh = _mm256_sub_ps(_mm256_set1_ps(h), r);
+          __m256 vh2 = _mm256_mul_ps(vh, vh);
+          __m256 grad = _mm256_and_ps(_mm256_mul_ps(spiky_scale, vh2), mask);
+
+          __m256 d2v = _mm256_loadu_ps(dens + k);
+          __m256 p2v = _mm256_loadu_ps(press + k);
+          __m256 d2sq = _mm256_mul_ps(d2v, d2v);
+          __m256 term = _mm256_add_ps(p1_termv, _mm256_div_ps(p2v, d2sq));
+
+          __m256 factor = _mm256_mul_ps(minus_mass, _mm256_mul_ps(term, grad));
+
+          pfx = _mm256_add_ps(pfx, _mm256_mul_ps(dirx, factor));
+          pfy = _mm256_add_ps(pfy, _mm256_mul_ps(diry, factor));
+
+          __m256 visc = _mm256_and_ps(_mm256_mul_ps(visc_scale, vh), mask);
+          __m256 v2xv = _mm256_loadu_ps(vx + k);
+          __m256 v2yv = _mm256_loadu_ps(vy + k);
+          vfx = _mm256_add_ps(vfx, _mm256_mul_ps(_mm256_sub_ps(v2xv, v1xv), visc));
+          vfy = _mm256_add_ps(vfy, _mm256_mul_ps(_mm256_sub_ps(v2yv, v1yv), visc));
+
+          __m256 q = _mm256_mul_ps(r, inv_half_h);
+          __m256 alpha = _mm256_sub_ps(_mm256_set1_ps(1.f), q);
+          __m256 coh_mask =
+            _mm256_and_ps(mask, _mm256_cmp_ps(r,
+                                              _mm256_set1_ps(h * 0.5f),
+                                              _CMP_LT_OQ));
+          __m256 cohes =
+            _mm256_and_ps(_mm256_mul_ps(alpha, alpha), coh_mask);
+
+          cfx = _mm256_add_ps(cfx, _mm256_mul_ps(dirx, cohes));
+          cfy = _mm256_add_ps(cfy, _mm256_mul_ps(diry, cohes));
+        }
+
+        for (; k < k1; ++k) {
+          float p2x = px[k];
+          float p2y = py[k];
+
+          float rx = p1.x - p2x;
+          float ry = p1.y - p2y;
+
+          float r2 = rx * rx + ry * ry;
+
+          if (r2 <= 0.f || r2 > h2) continue;
+
+          float r = sqrtf(r2);
+          float inv_r = 1.f / r;
+
+          Vector2 dir{rx * inv_r, ry * inv_r};
+
+          float grad = SpikyKernelGradient(r, h);
+
+          float d2 = dens[k];
+          float p2_pressure = press[k];
+          float v2x = vx[k];
+          float v2y = vy[k];
+
+          float term = p1_term + (p2_pressure / (d2 * d2));
+          float factor = -mass * term * grad;
+
+          pfx = _mm256_add_ps(pfx, _mm256_set1_ps(dir.x * factor));
+          pfy = _mm256_add_ps(pfy, _mm256_set1_ps(dir.y * factor));
+
+          float visc = ViscosityKernel(r, h);
+          vfx = _mm256_add_ps(vfx, _mm256_set1_ps((v2x - v1x) * visc));
+          vfy = _mm256_add_ps(vfy, _mm256_set1_ps((v2y - v1y) * visc));
+
+          float cohes = CohesionKernel(r, h);
+          cfx = _mm256_add_ps(cfx, _mm256_set1_ps(dir.x * cohes));
+          cfy = _mm256_add_ps(cfy, _mm256_set1_ps(dir.y * cohes));
+        }
+      }
+    }
+
+    auto horiz = [](__m256 v) {
+      __m128 lo = _mm256_castps256_ps128(v);
+      __m128 hi = _mm256_extractf128_ps(v, 1);
+      __m128 s = _mm_add_ps(lo, hi);
+      s = _mm_hadd_ps(s, s);
+      s = _mm_hadd_ps(s, s);
+      return _mm_cvtss_f32(s);
+    };
+
+    pb.pressure_forces_data[i * 2] = horiz(pfx);
+    pb.pressure_forces_data[i * 2 + 1] = horiz(pfy);
+    pb.viscosity_forces_data[i * 2] = horiz(vfx);
+    pb.viscosity_forces_data[i * 2 + 1] = horiz(vfy);
+    pb.cohesion_forces_data[i * 2] = horiz(cfx);
+    pb.cohesion_forces_data[i * 2 + 1] = horiz(cfy);
+  }
+
+  return nullptr;
+}
+#endif
 
 struct ApplyTask {
   int start;
@@ -583,8 +966,15 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt, float damp) {
   pb.cohesion_forces_data.resize(static_cast<size_t>(n) * 2);
 
   ForceTask force_seed{0, n, sim.smoothing_radius, mass, &pb};
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+  static const bool use_avx2 = Avx2ForceAvailable();
+  RunParallelChunks(GetEffectiveThreads(n), n, force_seed,
+                    (use_avx2 && !NoAvx2ForDebug()) ? ComputePressureForceRangeAvx2
+                                                    : ComputePressureForceRange);
+#else
   RunParallelChunks(GetEffectiveThreads(n), n, force_seed,
                     ComputePressureForceRange);
+#endif
 
   ApplyTask apply_seed{0, n, dt, sim.viscosity, sim.surface_tension, mass,
                        damp, sim.particle_size, &pb};
@@ -880,69 +1270,69 @@ inline void ResolveCollisions(ECS& ecs) {
     }
 
     for (size_t i = 0; i < particles.size(); ++i) {
-      float px = particles[i].pos->position.x;
-      float py = particles[i].pos->position.y;
-      if (px < 0 || px > CANVAS_W || py < 0 || py > CANVAS_H) continue;
-      int cx = static_cast<int>(px / cell_size) + 1;
-      int cy = static_cast<int>(py / cell_size) + 1;
+        float px = particles[i].pos->position.x;
+        float py = particles[i].pos->position.y;
+        if (px < 0 || px > CANVAS_W || py < 0 || py > CANVAS_H) continue;
+        int cx = static_cast<int>(px / cell_size) + 1;
+        int cy = static_cast<int>(py / cell_size) + 1;
 
-      auto& a = particles[i];
-      const float a_radius = a.circ->radius;
+        auto& a = particles[i];
+        const float a_radius = a.circ->radius;
 
-      for (int dy = -1; dy <= 1; ++dy) {
-        int ny = cy + dy;
-        if (ny < 0 || ny >= rows) continue;
-        for (int dx = -1; dx <= 1; ++dx) {
-          int nx = cx + dx;
-          if (nx < 0 || nx >= cols) continue;
+        for (int dy = -1; dy <= 1; ++dy) {
+          int ny = cy + dy;
+          if (ny < 0 || ny >= rows) continue;
+          for (int dx = -1; dx <= 1; ++dx) {
+            int nx = cx + dx;
+            if (nx < 0 || nx >= cols) continue;
 
-          for (size_t j : pb.collision_grid[ny * cols + nx]) {
-            if (j <= i) continue;
+            for (size_t j : pb.collision_grid[ny * cols + nx]) {
+              if (j <= i) continue;
 
-            auto& b = particles[j];
+              auto& b = particles[j];
 
-            float dx_pos = b.pos->position.x - px;
-            float dy_pos = b.pos->position.y - py;
-            float dist_sq = dx_pos * dx_pos + dy_pos * dy_pos;
-            if (dist_sq <= 0.f) continue;
+              float dx_pos = b.pos->position.x - px;
+              float dy_pos = b.pos->position.y - py;
+              float dist_sq = dx_pos * dx_pos + dy_pos * dy_pos;
+              if (dist_sq <= 0.f) continue;
 
-            float radius_sum = a_radius + b.circ->radius;
-            float repulse_dist = radius_sum * 3.f;
-            if (dist_sq >= repulse_dist * repulse_dist) continue;
+              float radius_sum = a_radius + b.circ->radius;
+              float repulse_dist = radius_sum * 3.f;
+              if (dist_sq >= repulse_dist * repulse_dist) continue;
 
-            float dist = std::sqrt(dist_sq);
-            float inv_dist = 1.f / dist;
-            float dir_x = dx_pos * inv_dist;
-            float dir_y = dy_pos * inv_dist;
+              float dist = std::sqrt(dist_sq);
+              float inv_dist = 1.f / dist;
+              float dir_x = dx_pos * inv_dist;
+              float dir_y = dy_pos * inv_dist;
 
-            if (dist < repulse_dist) {
-              float repulse_strength = (repulse_dist - dist) * inv_dist;
-              a.vel->velocity.x -=
-                dir_x * particle_repulsion * repulse_strength;
-              a.vel->velocity.y -=
-                dir_y * particle_repulsion * repulse_strength;
-              b.vel->velocity.x +=
-                dir_x * particle_repulsion * repulse_strength;
-              b.vel->velocity.y +=
-                dir_y * particle_repulsion * repulse_strength;
+              if (dist < repulse_dist) {
+                float repulse_strength = (repulse_dist - dist) * inv_dist;
+                a.vel->velocity.x -=
+                  dir_x * particle_repulsion * repulse_strength;
+                a.vel->velocity.y -=
+                  dir_y * particle_repulsion * repulse_strength;
+                b.vel->velocity.x +=
+                  dir_x * particle_repulsion * repulse_strength;
+                b.vel->velocity.y +=
+                  dir_y * particle_repulsion * repulse_strength;
+              }
+
+              if (dist < radius_sum) {
+                float overlap = radius_sum - dist;
+                a.pos->position.x -= dir_x * overlap * 0.5f;
+                a.pos->position.y -= dir_y * overlap * 0.5f;
+                b.pos->position.x += dir_x * overlap * 0.5f;
+                b.pos->position.y += dir_y * overlap * 0.5f;
+
+                float dot = (b.vel->velocity.x - a.vel->velocity.x) * dir_x +
+                            (b.vel->velocity.y - a.vel->velocity.y) * dir_y;
+                a.vel->velocity.x += dir_x * dot * 0.5f;
+                a.vel->velocity.y += dir_y * dot * 0.5f;
+                b.vel->velocity.x -= dir_x * dot * 0.5f;
+                b.vel->velocity.y -= dir_y * dot * 0.5f;
+              }
             }
-
-            if (dist < radius_sum) {
-              float overlap = radius_sum - dist;
-              a.pos->position.x -= dir_x * overlap * 0.5f;
-              a.pos->position.y -= dir_y * overlap * 0.5f;
-              b.pos->position.x += dir_x * overlap * 0.5f;
-              b.pos->position.y += dir_y * overlap * 0.5f;
-
-              float dot = (b.vel->velocity.x - a.vel->velocity.x) * dir_x +
-                          (b.vel->velocity.y - a.vel->velocity.y) * dir_y;
-              a.vel->velocity.x += dir_x * dot * 0.5f;
-              a.vel->velocity.y += dir_y * dot * 0.5f;
-              b.vel->velocity.x -= dir_x * dot * 0.5f;
-              b.vel->velocity.y -= dir_y * dot * 0.5f;
-            }
-          }
-        }
+}
       }
     }
   }
@@ -1089,7 +1479,15 @@ inline void ComputeParticleDensity(ECS& ecs) {
 
   DensityTask seed{0, n, sim.smoothing_radius, sim.particle_size,
                    sim.target_density, sim.pressure_multiplier, &pb};
+
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+  static const bool use_avx2 = Avx2DensityAvailable();
+  RunParallelChunks(GetEffectiveThreads(n), n, seed,
+                    (use_avx2 && !NoAvx2ForDebug()) ? ComputeDensityRangeAvx2
+                                                    : ComputeDensityRange);
+#else
   RunParallelChunks(GetEffectiveThreads(n), n, seed, ComputeDensityRange);
+#endif
 }
 
 /**
@@ -1100,6 +1498,16 @@ inline void ComputeParticleDensity(ECS& ecs) {
 inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
   auto& sim = entities::Simulation(ecs);
   PhysicsBuffers& pb = Physics(ecs);
+
+  static bool profile = [] {
+    const char* v = std::getenv("FLUVIUS_PROFILE");
+    return v && v[0] == '1';
+  }();
+  static size_t profile_step = 0;
+  static double t_predict = 0, t_density = 0, t_force = 0, t_collide = 0,
+                t_total = 0;
+
+  using Clock = std::chrono::steady_clock;
 
   if (sim.particle_cache_dirty || !pb.particle_entities_cached) {
     CacheParticleEntities(ecs, pb);
@@ -1112,11 +1520,32 @@ inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
 
   float effective_dt = dt * sim.sim_speed;
 
+  auto t0 = Clock::now();
   PredictPositions(ecs, pb, effective_dt);
+  auto t1 = Clock::now();
   ComputeParticleDensity(ecs);
+  auto t2 = Clock::now();
   ComputeParticlePressureForce(ecs, effective_dt, sim.velocity_damping);
-
+  auto t3 = Clock::now();
   ResolveCollisions(ecs);
+  auto t4 = Clock::now();
+
+  if (profile) {
+    t_predict += std::chrono::duration<double, std::milli>(t1 - t0).count();
+    t_density += std::chrono::duration<double, std::milli>(t2 - t1).count();
+    t_force += std::chrono::duration<double, std::milli>(t3 - t2).count();
+    t_collide += std::chrono::duration<double, std::milli>(t4 - t3).count();
+    t_total += std::chrono::duration<double, std::milli>(t4 - t0).count();
+    ++profile_step;
+    if (profile_step % 50 == 0) {
+      std::fprintf(stderr,
+                   "[profile] n=%zu total=%5.2f predict=%5.2f density=%5.2f "
+                   "force=%5.2f collide=%5.2f ms/step\n",
+                   pb.particle_entities.size(), t_total / profile_step,
+                   t_predict / profile_step, t_density / profile_step,
+                   t_force / profile_step, t_collide / profile_step);
+    }
+  }
 }
 
 }  // namespace motrix::engine::systems
