@@ -280,6 +280,41 @@ Example:
 ./premake5 gmake --backend=win32
 ```
 
+### Maximum Performance Builds
+
+Available via the `--perf` flag (applies to the `fluvius`, `fluvius-bench`
+and `raylib` projects; the release `-O2` baseline is overridden):
+
+- `none` - stock `-O2` (default)
+- `fast` - `-O3 -flto` (portable, numerically identical)
+- `avx2` - `-O3 -flto -mavx2 -mfma -mbmi2` (runs on any AVX2 CPU)
+- `native` - `-O3 -flto -march=native -mtune=native` (best, but the binary
+  only runs on the machine it was built on)
+
+Example:
+```bash
+cd build
+./premake5 gmake --perf=native
+cd ..
+make clean
+make -j$(nproc) config=release_x64
+./bin/Release/Fluvius
+```
+
+> **Note:** The physics kernels (density/force) are already compiled with AVX2
+> by default via `#pragma GCC target("avx2")`, so these flags mainly help the
+> remaining scalar code and enable link-time optimization. The remaining
+> bottleneck at large particle counts is the serial pressure/cohesion collide
+> phase.
+>
+> `-mfma`/`-march=native` slightly change floating-point rounding (fused
+> multiply-add), producing visually identical results that are not
+> bit-for-bit the same as the default build. Use `--perf=fast` if bit-exact
+> reproducibility matters.
+>
+> There is deliberately no `-ffast-math` preset: it would break the SPH
+> kernels' ordered-compare/NaN mask semantics.
+
 ---
 
 ## VSCode Integration
