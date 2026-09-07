@@ -5,7 +5,6 @@
 
 #include <cfloat>
 #include <cmath>
-#include <unordered_map>
 #include <vector>
 
 #include "../../entities/fluid.h"
@@ -57,8 +56,15 @@ inline int GetEffectiveThreads(size_t particle_count) {
  */
 template <typename Task, typename Fn>
 inline void RunParallelChunks(int effective, size_t particle_count,
-                              const Task& seed, Fn fn) {
+                              Task& seed, Fn fn) {
   int n = static_cast<int>(particle_count);
+  if (effective <= 1) {
+    seed.start = 0;
+    seed.end = n;
+    fn(&seed);
+    return;
+  }
+
   int chunk_size = n / effective;
   if (chunk_size < 64) chunk_size = 64;
 
@@ -101,15 +107,19 @@ struct PhysicsBuffers {
   std::vector<components::CircleComponent*> circ_cache;
   bool particle_entities_cached = false;
 
-  std::unordered_map<GridCell, std::vector<size_t>, GridCellHash> spatial_grid;
+  // Flat uniform grid (dense, indexed by cy*cols+cx). Rebuilt every step;
+  // vector capacities are reused across steps so no per-frame allocation.
+  int grid_cols = 0;
+  int grid_rows = 0;
+  float grid_cell_size = 0.f;
+  std::vector<std::vector<size_t>> grid_cells;
 
-  std::vector<float> temp_densities;
-  std::vector<Vector2> pressure_forces;
-  std::vector<Vector2> viscosity_forces;
-  std::vector<Vector2> cohesion_forces;
   std::vector<float> densities;
   std::vector<float> pressures;
   std::vector<Vector2> velocities;
+  std::vector<float> pressure_forces_data;
+  std::vector<float> viscosity_forces_data;
+  std::vector<float> cohesion_forces_data;
 
   float cached_gravity_accel = 0.f;
   bool kernel_cache_valid = false;
@@ -146,12 +156,44 @@ inline void CacheParticleEntities(ECS& ecs, PhysicsBuffers& pb) {
   logger::info("[PHYSICS] Cached {} particles", pb.particle_entities.size());
 }
 
+inline int GridCellCountX(float h) {
+  return static_cast<int>(CANVAS_W / h) + 3;
+}
+
+inline int GridCellCountY(float h) {
+  return static_cast<int>(CANVAS_H / h) + 3;
+}
+
+// Maps a world position to clamped flat-grid cell coordinates. The +1 offset
+// centers the particle domain so the one-cell margin keeps the 3x3 sweep in
+// bounds even when particles drift slightly past the canvas edge.
+inline void PositionToFlatCell(Vector2 p, float h, int cols, int rows,
+                               int& cx, int& cy) {
+  cx = std::clamp(static_cast<int>(std::floor(p.x / h)) + 1, 0, cols - 1);
+  cy = std::clamp(static_cast<int>(std::floor(p.y / h)) + 1, 0, rows - 1);
+}
+
 inline void BuildSpatialGrid(PhysicsBuffers& pb, float h) {
-  pb.spatial_grid.clear();
+  if (h <= 0.f) return;
+
+  int cols = GridCellCountX(h);
+  int rows = GridCellCountY(h);
+
+  if (pb.grid_cols != cols || pb.grid_rows != rows ||
+      pb.grid_cell_size != h) {
+    pb.grid_cells.assign(static_cast<size_t>(cols) * rows, {});
+    pb.grid_cols = cols;
+    pb.grid_rows = rows;
+    pb.grid_cell_size = h;
+  }
+
+  for (auto& cell : pb.grid_cells) cell.clear();
 
   for (size_t i = 0; i < pb.predicted_positions.size(); ++i) {
-    GridCell cell = PositionToCell(pb.predicted_positions[i], h);
-    pb.spatial_grid[cell].push_back(i);
+    int cx;
+    int cy;
+    PositionToFlatCell(pb.predicted_positions[i], h, cols, rows, cx, cy);
+    pb.grid_cells[cy * cols + cx].push_back(i);
   }
 }
 
@@ -160,11 +202,6 @@ inline void UpdateKernelCache(PhysicsBuffers& pb, float gravity) {
     return;
   pb.cached_gravity_accel = gravity * 10.f;
   pb.kernel_cache_valid = true;
-}
-
-inline float ConvertDensityToPressure(const components::SimulationComponent& sim,
-                                      float density) {
-  return (density - sim.target_density) * sim.pressure_multiplier;
 }
 
 /**
@@ -182,37 +219,29 @@ inline void PredictPositions(ECS& ecs, PhysicsBuffers& pb, float dt) {
 
   float gravity = pb.cached_gravity_accel;
   size_t n = pb.particle_entities.size();
-  int effective = GetEffectiveThreads(n);
+  pb.velocities.resize(n);
 
-  if (effective <= 1 || n < 256) {
-    for (size_t i = 0; i < n; ++i) {
-      pb.vel_cache[i]->velocity.y += gravity * dt;
-      pb.predicted_positions[i] = {
-        pb.pos_cache[i]->position.x + pb.vel_cache[i]->velocity.x * dt,
-        pb.pos_cache[i]->position.y + pb.vel_cache[i]->velocity.y * dt};
+  struct PredictTask {
+    int start;
+    int end;
+    float grav;
+    float dt;
+    PhysicsBuffers* pb;
+  };
+  PredictTask seed{0, static_cast<int>(n), gravity, dt, &pb};
+  RunParallelChunks(GetEffectiveThreads(n), n, seed, [](void* arg) -> void* {
+    auto* tk = static_cast<PredictTask*>(arg);
+    for (int i = tk->start; i < tk->end; ++i) {
+      tk->pb->vel_cache[i]->velocity.y += tk->grav * tk->dt;
+      tk->pb->predicted_positions[i] = {
+        tk->pb->pos_cache[i]->position.x +
+          tk->pb->vel_cache[i]->velocity.x * tk->dt,
+        tk->pb->pos_cache[i]->position.y +
+          tk->pb->vel_cache[i]->velocity.y * tk->dt};
+      tk->pb->velocities[i] = tk->pb->vel_cache[i]->velocity;
     }
-  } else {
-    struct PredictTask {
-      int start;
-      int end;
-      float grav;
-      float dt;
-      PhysicsBuffers* pb;
-    };
-    PredictTask seed{0, 0, gravity, dt, &pb};
-    RunParallelChunks(effective, n, seed, [](void* arg) -> void* {
-      auto* tk = static_cast<PredictTask*>(arg);
-      for (int i = tk->start; i < tk->end; ++i) {
-        tk->pb->vel_cache[i]->velocity.y += tk->grav * tk->dt;
-        tk->pb->predicted_positions[i] = {
-          tk->pb->pos_cache[i]->position.x +
-            tk->pb->vel_cache[i]->velocity.x * tk->dt,
-          tk->pb->pos_cache[i]->position.y +
-            tk->pb->vel_cache[i]->velocity.y * tk->dt};
-      }
-      return nullptr;
-    });
-  }
+    return nullptr;
+  });
 
   BuildSpatialGrid(pb, sim.smoothing_radius);
 }
@@ -223,39 +252,49 @@ inline void PredictPositions(ECS& ecs, PhysicsBuffers& pb, float dt) {
  * ============================================================================
  */
 
-struct ParallelDensityTask {
+struct DensityTask {
   int start;
   int end;
   float h;
   float mass;
+  float target_density;
+  float pressure_multiplier;
   PhysicsBuffers* pb;
 };
 
 inline void* ComputeDensityRange(void* arg) {
-  auto* task = static_cast<ParallelDensityTask*>(arg);
-  int start = task->start;
-  int end = task->end;
+  auto* task = static_cast<DensityTask*>(arg);
+  const int start = task->start;
+  const int end = task->end;
 
-  float h = task->h;
-  float h2 = h * h;
-  float mass = task->mass;
+  const float h = task->h;
+  const float h2 = h * h;
+  const float mass = task->mass;
+  const float target_density = task->target_density;
+  const float pressure_multiplier = task->pressure_multiplier;
   PhysicsBuffers& pb = *task->pb;
+
+  const int cols = pb.grid_cols;
+  const int rows = pb.grid_rows;
 
   for (int i = start; i < end && i < static_cast<int>(pb.particle_entities.size());
        ++i) {
     Vector2 p = pb.predicted_positions[i];
-    GridCell cell = PositionToCell(p, h);
+
+    int cx;
+    int cy;
+    PositionToFlatCell(p, h, cols, rows, cx, cy);
 
     float density = 0.f;
 
     for (int dx = -1; dx <= 1; ++dx) {
+      int nx = cx + dx;
+      if (nx < 0 || nx >= cols) continue;
       for (int dy = -1; dy <= 1; ++dy) {
-        GridCell neighbor{cell.x + dx, cell.y + dy};
+        int ny = cy + dy;
+        if (ny < 0 || ny >= rows) continue;
 
-        auto it = pb.spatial_grid.find(neighbor);
-        if (it == pb.spatial_grid.end()) continue;
-
-        for (size_t j : it->second) {
+        for (size_t j : pb.grid_cells[ny * cols + nx]) {
           Vector2 p2 = pb.predicted_positions[j];
 
           float rx = p2.x - p.x;
@@ -268,24 +307,12 @@ inline void* ComputeDensityRange(void* arg) {
       }
     }
 
-    pb.temp_densities[i] = density;
+    pb.circ_cache[i]->density = density;
+    pb.densities[i] = density;
+    pb.pressures[i] = (density - target_density) * pressure_multiplier;
   }
 
   return nullptr;
-}
-
-/**
- * ============================================================================
- * Pressure
- * ============================================================================
- */
-
-inline void ComputeParticlePressure(ECS& ecs) {
-  auto& sim = entities::Simulation(ecs);
-  ecs.group_view<components::CircleComponent>(
-    [&](Entity, components::CircleComponent& c) {
-      c.pressure = ConvertDensityToPressure(sim, c.density);
-    });
 }
 
 /**
@@ -294,7 +321,7 @@ inline void ComputeParticlePressure(ECS& ecs) {
  * ============================================================================
  */
 
-struct ParallelForceTask {
+struct ForceTask {
   int start;
   int end;
   float h;
@@ -303,19 +330,25 @@ struct ParallelForceTask {
 };
 
 inline void* ComputePressureForceRange(void* arg) {
-  auto* task = static_cast<ParallelForceTask*>(arg);
-  int start = task->start;
-  int end = task->end;
+  auto* task = static_cast<ForceTask*>(arg);
+  const int start = task->start;
+  const int end = task->end;
 
-  float h = task->h;
-  float h2 = h * h;
-  float mass = task->mass;
+  const float h = task->h;
+  const float h2 = h * h;
+  const float mass = task->mass;
   PhysicsBuffers& pb = *task->pb;
+
+  const int cols = pb.grid_cols;
+  const int rows = pb.grid_rows;
 
   for (int i = start; i < end && i < static_cast<int>(pb.particle_entities.size());
        ++i) {
     Vector2 p1 = pb.predicted_positions[i];
-    GridCell cell = PositionToCell(p1, h);
+
+    int cx;
+    int cy;
+    PositionToFlatCell(p1, h, cols, rows, cx, cy);
 
     float d1 = pb.densities[i];
     float p1_pressure = pb.pressures[i];
@@ -326,13 +359,13 @@ inline void* ComputePressureForceRange(void* arg) {
     Vector2 cohesion_force{0.f, 0.f};
 
     for (int dx = -1; dx <= 1; ++dx) {
+      int nx = cx + dx;
+      if (nx < 0 || nx >= cols) continue;
       for (int dy = -1; dy <= 1; ++dy) {
-        GridCell neighbor{cell.x + dx, cell.y + dy};
+        int ny = cy + dy;
+        if (ny < 0 || ny >= rows) continue;
 
-        auto it = pb.spatial_grid.find(neighbor);
-        if (it == pb.spatial_grid.end()) continue;
-
-        for (size_t j : it->second) {
+        for (size_t j : pb.grid_cells[ny * cols + nx]) {
           if (i == j) continue;
 
           Vector2 p2 = pb.predicted_positions[j];
@@ -373,137 +406,88 @@ inline void* ComputePressureForceRange(void* arg) {
       }
     }
 
-    pb.pressure_forces[i] = pressure_force;
-    pb.viscosity_forces[i] = viscosity_force;
-    pb.cohesion_forces[i] = cohesion_force;
+    pb.pressure_forces_data[i * 2] = pressure_force.x;
+    pb.pressure_forces_data[i * 2 + 1] = pressure_force.y;
+    pb.viscosity_forces_data[i * 2] = viscosity_force.x;
+    pb.viscosity_forces_data[i * 2 + 1] = viscosity_force.y;
+    pb.cohesion_forces_data[i * 2] = cohesion_force.x;
+    pb.cohesion_forces_data[i * 2 + 1] = cohesion_force.y;
   }
 
   return nullptr;
 }
 
-inline void ComputeParticlePressureForce(ECS& ecs, float dt) {
+struct ApplyTask {
+  int start;
+  int end;
+  float dt;
+  float viscosity;
+  float surface_tension;
+  float mass;
+  float damp;
+  float particle_size;
+  PhysicsBuffers* pb;
+};
+
+// Fused integration pass: applies pressure/viscosity/cohesion to velocity,
+// advances positions, resets the radius and applies velocity damping — one
+// loop instead of the previous three independent full-array walks.
+inline void* ApplyFluidForcesRange(void* arg) {
+  auto* task = static_cast<ApplyTask*>(arg);
+  const float dt = task->dt;
+  const float viscosity = task->viscosity;
+  const float surface_tension = task->surface_tension;
+  const float mass = task->mass;
+  const float damp = task->damp;
+  const float particle_size = task->particle_size;
+  PhysicsBuffers& pb = *task->pb;
+
+  for (int i = task->start;
+       i < task->end && i < static_cast<int>(pb.particle_entities.size()); ++i) {
+    auto* vel = pb.vel_cache[i];
+    auto* pos = pb.pos_cache[i];
+    auto* circ = pb.circ_cache[i];
+
+    circ->radius = particle_size;
+
+    vel->velocity.x += pb.pressure_forces_data[i * 2] * dt;
+    vel->velocity.y += pb.pressure_forces_data[i * 2 + 1] * dt;
+
+    vel->velocity.x += pb.viscosity_forces_data[i * 2] * viscosity * 50.f;
+    vel->velocity.y += pb.viscosity_forces_data[i * 2 + 1] * viscosity * 50.f;
+
+    vel->velocity.x +=
+      pb.cohesion_forces_data[i * 2] * surface_tension * mass;
+    vel->velocity.y +=
+      pb.cohesion_forces_data[i * 2 + 1] * surface_tension * mass;
+
+    pos->position.x += vel->velocity.x * dt;
+    pos->position.y += vel->velocity.y * dt;
+
+    vel->velocity.x *= damp;
+    vel->velocity.y *= damp;
+  }
+
+  return nullptr;
+}
+
+inline void ComputeParticlePressureForce(ECS& ecs, float dt, float damp) {
   auto& sim = entities::Simulation(ecs);
   PhysicsBuffers& pb = Physics(ecs);
 
-  int effective_threads = GetEffectiveThreads(pb.particle_entities.size());
-  if (!threads_initialized || effective_threads <= 1 ||
-      pb.particle_entities.size() < 256) {
-    float h = sim.smoothing_radius;
-    float h2 = h * h;
-    float mass = sim.particle_size;
-    float viscosity = sim.viscosity;
-    float surface_tension = sim.surface_tension;
-
-    for (size_t i = 0; i < pb.particle_entities.size(); ++i) {
-      Entity e1 = pb.particle_entities[i];
-
-      auto& c1 = ecs.get<components::CircleComponent>(e1);
-      auto& v1 = ecs.get<components::VelocityComponent>(e1);
-
-      Vector2 p1 = pb.predicted_positions[i];
-      GridCell cell = PositionToCell(p1, h);
-
-      Vector2 pressure_force{0.f, 0.f};
-      Vector2 viscosity_force{0.f, 0.f};
-      Vector2 cohesion_force{0.f, 0.f};
-
-      for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
-          GridCell neighbor{cell.x + dx, cell.y + dy};
-
-          auto it = pb.spatial_grid.find(neighbor);
-          if (it == pb.spatial_grid.end()) continue;
-
-          for (size_t j : it->second) {
-            if (i == j) continue;
-
-            Entity e2 = pb.particle_entities[j];
-
-            auto& c2 = ecs.get<components::CircleComponent>(e2);
-            auto& v2 = ecs.get<components::VelocityComponent>(e2);
-
-            Vector2 p2 = pb.predicted_positions[j];
-
-            float rx = p1.x - p2.x;
-            float ry = p1.y - p2.y;
-
-            float r2 = rx * rx + ry * ry;
-
-            if (r2 <= 0.f || r2 > h2) continue;
-
-            float r = sqrtf(r2);
-
-            Vector2 dir{rx / r, ry / r};
-
-            float grad = SpikyKernelGradient(r, h);
-
-            float term = (c1.pressure / (c1.density * c1.density)) +
-                         (c2.pressure / (c2.density * c2.density));
-
-            float factor = -mass * term * grad;
-
-            pressure_force.x += dir.x * factor;
-            pressure_force.y += dir.y * factor;
-
-            float visc = ViscosityKernel(r, h);
-
-            viscosity_force.x += (v2.velocity.x - v1.velocity.x) * visc;
-            viscosity_force.y += (v2.velocity.y - v1.velocity.y) * visc;
-
-            float cohes = CohesionKernel(r, h);
-            cohesion_force.x += dir.x * cohes;
-            cohesion_force.y += dir.y * cohes;
-          }
-        }
-      }
-
-      v1.velocity.x += pressure_force.x * dt;
-      v1.velocity.y += pressure_force.y * dt;
-
-      v1.velocity.x += viscosity_force.x * viscosity;
-      v1.velocity.y += viscosity_force.y * viscosity;
-
-      v1.velocity.x += cohesion_force.x * surface_tension * mass;
-      v1.velocity.y += cohesion_force.y * surface_tension * mass;
-    }
-    return;
-  }
-
   int n = static_cast<int>(pb.particle_entities.size());
-  pb.pressure_forces.resize(n);
-  pb.viscosity_forces.resize(n);
-  pb.cohesion_forces.resize(n);
-  pb.densities.resize(n);
-  pb.pressures.resize(n);
-  pb.velocities.resize(n);
-
-  for (int i = 0; i < n; ++i) {
-    auto& c = ecs.get<components::CircleComponent>(pb.particle_entities[i]);
-    auto& v = ecs.get<components::VelocityComponent>(pb.particle_entities[i]);
-    pb.densities[i] = c.density;
-    pb.pressures[i] = c.pressure;
-    pb.velocities[i] = v.velocity;
-  }
-
-  ParallelForceTask seed{0, 0, sim.smoothing_radius, sim.particle_size, &pb};
-  RunParallelChunks(effective_threads, n, seed, ComputePressureForceRange);
-
-  float viscosity = sim.viscosity;
-  float surface_tension = sim.surface_tension;
   float mass = sim.particle_size;
+  pb.pressure_forces_data.resize(static_cast<size_t>(n) * 2);
+  pb.viscosity_forces_data.resize(static_cast<size_t>(n) * 2);
+  pb.cohesion_forces_data.resize(static_cast<size_t>(n) * 2);
 
-  for (int i = 0; i < n; ++i) {
-    auto& v1 = ecs.get<components::VelocityComponent>(pb.particle_entities[i]);
+  ForceTask force_seed{0, n, sim.smoothing_radius, mass, &pb};
+  RunParallelChunks(GetEffectiveThreads(n), n, force_seed,
+                    ComputePressureForceRange);
 
-    v1.velocity.x += pb.pressure_forces[i].x * dt;
-    v1.velocity.y += pb.pressure_forces[i].y * dt;
-
-    v1.velocity.x += pb.viscosity_forces[i].x * viscosity * 50.f;
-    v1.velocity.y += pb.viscosity_forces[i].y * viscosity * 50.f;
-
-    v1.velocity.x += pb.cohesion_forces[i].x * surface_tension * mass;
-    v1.velocity.y += pb.cohesion_forces[i].y * surface_tension * mass;
-  }
+  ApplyTask apply_seed{0, n, dt, sim.viscosity, sim.surface_tension, mass,
+                       damp, sim.particle_size, &pb};
+  RunParallelChunks(GetEffectiveThreads(n), n, apply_seed, ApplyFluidForcesRange);
 }
 
 /**
@@ -984,57 +968,13 @@ inline void ComputeParticleDensity(ECS& ecs) {
   auto& sim = entities::Simulation(ecs);
   PhysicsBuffers& pb = Physics(ecs);
 
-  int effective_threads = GetEffectiveThreads(pb.particle_entities.size());
-  if (!threads_initialized || effective_threads <= 1 ||
-      pb.particle_entities.size() < 256) {
-    float h = sim.smoothing_radius;
-    float h2 = h * h;
-    float mass = sim.particle_size;
-
-    for (size_t i = 0; i < pb.particle_entities.size(); ++i) {
-      Entity e = pb.particle_entities[i];
-      auto& c = ecs.get<components::CircleComponent>(e);
-
-      Vector2 p = pb.predicted_positions[i];
-      GridCell cell = PositionToCell(p, h);
-
-      float density = 0.f;
-
-      for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
-          GridCell neighbor{cell.x + dx, cell.y + dy};
-
-          auto it = pb.spatial_grid.find(neighbor);
-          if (it == pb.spatial_grid.end()) continue;
-
-          for (size_t j : it->second) {
-            Vector2 p2 = pb.predicted_positions[j];
-
-            float rx = p2.x - p.x;
-            float ry = p2.y - p.y;
-
-            float r2 = rx * rx + ry * ry;
-
-            if (r2 <= h2) density += mass * Poly6Kernel(r2, h);
-          }
-        }
-      }
-
-      c.density = density;
-    }
-    return;
-  }
-
   int n = static_cast<int>(pb.particle_entities.size());
-  pb.temp_densities.resize(n);
+  pb.densities.resize(n);
+  pb.pressures.resize(n);
 
-  ParallelDensityTask seed{0, 0, sim.smoothing_radius, sim.particle_size, &pb};
-  RunParallelChunks(effective_threads, n, seed, ComputeDensityRange);
-
-  for (int i = 0; i < n; ++i) {
-    auto& c = ecs.get<components::CircleComponent>(pb.particle_entities[i]);
-    c.density = pb.temp_densities[i];
-  }
+  DensityTask seed{0, n, sim.smoothing_radius, sim.particle_size,
+                   sim.target_density, sim.pressure_multiplier, &pb};
+  RunParallelChunks(GetEffectiveThreads(n), n, seed, ComputeDensityRange);
 }
 
 /**
@@ -1059,24 +999,7 @@ inline void SimulateFluid(ECS& ecs, float dt, bool force_simulate = false) {
 
   PredictPositions(ecs, pb, effective_dt);
   ComputeParticleDensity(ecs);
-  ComputeParticlePressure(ecs);
-  ComputeParticlePressureForce(ecs, effective_dt);
-
-  size_t n = pb.particle_entities.size();
-  for (size_t i = 0; i < n; ++i) {
-    pb.circ_cache[i]->radius = sim.particle_size;
-  }
-
-  for (size_t i = 0; i < n; ++i) {
-    pb.pos_cache[i]->position.x += pb.vel_cache[i]->velocity.x * effective_dt;
-    pb.pos_cache[i]->position.y += pb.vel_cache[i]->velocity.y * effective_dt;
-  }
-
-  float damp = sim.velocity_damping;
-  for (size_t i = 0; i < n; ++i) {
-    pb.vel_cache[i]->velocity.x *= damp;
-    pb.vel_cache[i]->velocity.y *= damp;
-  }
+  ComputeParticlePressureForce(ecs, effective_dt, sim.velocity_damping);
 
   ResolveCollisions(ecs);
 }
