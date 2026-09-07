@@ -133,7 +133,7 @@ static void InitApp(m_app::AppState& state, m_app::SceneType sceneType) {
   state.currentScene = sceneType;
 
   int num_cores = std::thread::hardware_concurrency();
-  m_eng::systems::InitThreads(num_cores, state.ecs);
+  m_eng::systems::InitThreads(num_cores);
 
   motrix::entities::RegisterSimulationRoot(state.ecs);
 

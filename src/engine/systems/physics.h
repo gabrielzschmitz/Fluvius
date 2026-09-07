@@ -1,8 +1,6 @@
 // engine/systems/physics.h
 #pragma once
 
-#include <pthread.h>
-
 #include <cfloat>
 #include <cmath>
 #include <vector>
@@ -14,6 +12,7 @@
 #include "../ecs/ecs.h"
 #include "../systems/canvas.h"
 #include "../systems/sph_kernels.h"
+#include "../systems/thread_pool.h"
 #include "../systems/ui_helpers.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -28,14 +27,25 @@ namespace motrix::engine::systems {
 inline int num_threads = 1;
 inline bool threads_initialized = false;
 
-inline void InitThreads(int threads, ECS& ecs) {
-  if (threads_initialized) return;
-  num_threads = threads > 0 ? threads : 1;
+// Creates the persistent worker gang backing every parallel region. Safe to
+// call more than once: a gang of the same size is left untouched, a different
+// size tears down and respawns.
+inline void InitThreads(int threads) {
+  int count = threads > 0 ? threads : 1;
+  num_threads = count;
+
+  if (ThreadPool::Instance().Size() != static_cast<size_t>(count)) {
+    ThreadPool::Instance().Start(static_cast<size_t>(count));
+  }
+
   threads_initialized = true;
-  logger::info("[APP] Created {} threads for simulation", threads);
+  logger::info("[APP] Created {} threads for simulation", count);
 }
 
-inline void ShutdownThreads() { threads_initialized = false; }
+inline void ShutdownThreads() {
+  ThreadPool::Instance().Stop();
+  threads_initialized = false;
+}
 
 inline int GetEffectiveThreads(size_t particle_count) {
   if (particle_count < 256) return 1;
@@ -57,30 +67,7 @@ inline int GetEffectiveThreads(size_t particle_count) {
 template <typename Task, typename Fn>
 inline void RunParallelChunks(int effective, size_t particle_count,
                               Task& seed, Fn fn) {
-  int n = static_cast<int>(particle_count);
-  if (effective <= 1) {
-    seed.start = 0;
-    seed.end = n;
-    fn(&seed);
-    return;
-  }
-
-  int chunk_size = n / effective;
-  if (chunk_size < 64) chunk_size = 64;
-
-  std::vector<pthread_t> threads(effective);
-  std::vector<Task> tasks(effective);
-
-  for (int i = 0; i < effective; ++i) {
-    tasks[i] = seed;
-    tasks[i].start = i * chunk_size;
-    tasks[i].end = std::min(tasks[i].start + chunk_size, n);
-    pthread_create(&threads[i], nullptr, fn, &tasks[i]);
-  }
-
-  for (int i = 0; i < effective; ++i) {
-    pthread_join(threads[i], nullptr);
-  }
+  ThreadPool::Instance().Run(effective, particle_count, seed, fn);
 }
 
 /**
@@ -113,6 +100,13 @@ struct PhysicsBuffers {
   int grid_rows = 0;
   float grid_cell_size = 0.f;
   std::vector<std::vector<size_t>> grid_cells;
+
+  // Uniform grid used by the particle-particle collision pass (finer cell
+  // size than the SPH grid). Persistent for the same reason.
+  int collision_cols = 0;
+  int collision_rows = 0;
+  float collision_cell_size = 0.f;
+  std::vector<std::vector<size_t>> collision_grid;
 
   std::vector<float> densities;
   std::vector<float> pressures;
@@ -661,6 +655,7 @@ inline void UpdateSelectionDensity(ECS& ecs) {
 inline void ResolveCollisions(ECS& ecs) {
   const float particle_repulsion = 0.05f;
   auto& sim = entities::Simulation(ecs);
+  PhysicsBuffers& pb = Physics(ecs);
 
   ecs.group_view<components::CanvasComponent>(
     [&](Entity, components::CanvasComponent& canvas) {
@@ -756,7 +751,15 @@ inline void ResolveCollisions(ECS& ecs) {
     if (cell_size < 1.f) cell_size = 1.f;
     int cols = static_cast<int>(CANVAS_W / cell_size) + 3;
     int rows = static_cast<int>(CANVAS_H / cell_size) + 3;
-    std::vector<std::vector<size_t>> grid(cols * rows);
+
+    if (pb.collision_cols != cols || pb.collision_rows != rows ||
+        pb.collision_cell_size != cell_size) {
+      pb.collision_grid.assign(static_cast<size_t>(cols) * rows, {});
+      pb.collision_cols = cols;
+      pb.collision_rows = rows;
+      pb.collision_cell_size = cell_size;
+    }
+    for (auto& cell : pb.collision_grid) cell.clear();
 
     for (size_t i = 0; i < particles.size(); ++i) {
       float px = particles[i].pos->position.x;
@@ -765,7 +768,7 @@ inline void ResolveCollisions(ECS& ecs) {
       int cx = static_cast<int>(px / cell_size) + 1;
       int cy = static_cast<int>(py / cell_size) + 1;
       if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) {
-        grid[cy * cols + cx].push_back(i);
+        pb.collision_grid[cy * cols + cx].push_back(i);
       }
     }
 
@@ -776,6 +779,9 @@ inline void ResolveCollisions(ECS& ecs) {
       int cx = static_cast<int>(px / cell_size) + 1;
       int cy = static_cast<int>(py / cell_size) + 1;
 
+      auto& a = particles[i];
+      const float a_radius = a.circ->radius;
+
       for (int dy = -1; dy <= 1; ++dy) {
         int ny = cy + dy;
         if (ny < 0 || ny >= rows) continue;
@@ -783,25 +789,27 @@ inline void ResolveCollisions(ECS& ecs) {
           int nx = cx + dx;
           if (nx < 0 || nx >= cols) continue;
 
-          for (size_t j : grid[ny * cols + nx]) {
+          for (size_t j : pb.collision_grid[ny * cols + nx]) {
             if (j <= i) continue;
 
-            auto& a = particles[i];
             auto& b = particles[j];
 
-            float dx_pos = b.pos->position.x - a.pos->position.x;
-            float dy_pos = b.pos->position.y - a.pos->position.y;
+            float dx_pos = b.pos->position.x - px;
+            float dy_pos = b.pos->position.y - py;
             float dist_sq = dx_pos * dx_pos + dy_pos * dy_pos;
             if (dist_sq <= 0.f) continue;
 
-            float dist = std::sqrt(dist_sq);
-            float radius_sum = a.circ->radius + b.circ->radius;
-            float dir_x = dx_pos / dist;
-            float dir_y = dy_pos / dist;
-
+            float radius_sum = a_radius + b.circ->radius;
             float repulse_dist = radius_sum * 3.f;
+            if (dist_sq >= repulse_dist * repulse_dist) continue;
+
+            float dist = std::sqrt(dist_sq);
+            float inv_dist = 1.f / dist;
+            float dir_x = dx_pos * inv_dist;
+            float dir_y = dy_pos * inv_dist;
+
             if (dist < repulse_dist) {
-              float repulse_strength = (repulse_dist - dist) / dist;
+              float repulse_strength = (repulse_dist - dist) * inv_dist;
               a.vel->velocity.x -=
                 dir_x * particle_repulsion * repulse_strength;
               a.vel->velocity.y -=

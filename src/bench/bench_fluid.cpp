@@ -244,8 +244,6 @@ static void CreateWorld(m_eng::ECS& world, int threads, bool render,
   ResetPhysicsModule();
   m_ett::RegisterSimulationRoot(world);
   ApplySimulationParameters(world);
-  m_eng::systems::ShutdownThreads();
-  m_eng::systems::InitThreads(threads, world);
 
   // Canvas keeps particles confined like the interactive app does.
   motrix::entities::CreateCanvas(world);
@@ -328,6 +326,10 @@ int main(int argc, char** argv) {
     cfg.threads = std::thread::hardware_concurrency();
     if (cfg.threads == 0) cfg.threads = 1;
   }
+
+  // The persistent worker gang is spawned once for the whole sweep; each world
+  // run below reuses it.
+  m_eng::systems::InitThreads(cfg.threads);
 
   std::ostringstream header;
   header << "particle_size=" << kParticleSize << ", h=" << kSmoothingRadius
@@ -450,6 +452,8 @@ int main(int argc, char** argv) {
   }
 
   if (cfg.render) CloseWindow();
+
+  m_eng::systems::ShutdownThreads();
 
   return 0;
 }
