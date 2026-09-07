@@ -508,6 +508,18 @@ inline bool NoAvx2ForDebug() {
   return v && v[0] == '1';
 }
 
+// Finer-grained nails so density/force SIMD can be isolated when hunting
+// behavioural regressions.
+inline bool NoAvx2DensityForDebug() {
+  const char* v = std::getenv("FLUVIUS_NO_AVX2_DENSITY");
+  return v && v[0] == '1';
+}
+
+inline bool NoAvx2ForceForDebug() {
+  const char* v = std::getenv("FLUVIUS_NO_AVX2_FORCE");
+  return v && v[0] == '1';
+}
+
 inline void* ComputeDensityRangeAvx2(void* arg, int) {
   auto* task = static_cast<DensityTask*>(arg);
   const int start = task->start;
@@ -542,6 +554,7 @@ inline void* ComputeDensityRangeAvx2(void* arg, int) {
     __m256 pxv = _mm256_set1_ps(p.x);
     __m256 pyv = _mm256_set1_ps(p.y);
     __m256 acc = _mm256_setzero_ps();
+    float tail_density = 0.f;
 
     for (int dx = -1; dx <= 1; ++dx) {
       int nx = cx + dx;
@@ -575,7 +588,8 @@ inline void* ComputeDensityRangeAvx2(void* arg, int) {
           float rx = px[k] - p.x;
           float ry = py[k] - p.y;
           float r2 = rx * rx + ry * ry;
-          if (r2 <= h2) acc = _mm256_add_ps(acc, _mm256_set1_ps(mass * Poly6Kernel(r2, h)));
+          if (r2 <= h2)
+            tail_density += mass * Poly6Kernel(r2, h);
         }
       }
     }
@@ -585,7 +599,7 @@ inline void* ComputeDensityRangeAvx2(void* arg, int) {
     __m128 s = _mm_add_ps(lo, hi);
     s = _mm_hadd_ps(s, s);
     s = _mm_hadd_ps(s, s);
-    float density = _mm_cvtss_f32(s);
+    float density = _mm_cvtss_f32(s) + tail_density;
 
     float pressure = (density - target_density) * pressure_multiplier;
     pb.circ_cache[i]->density = density;
@@ -748,6 +762,15 @@ inline void* ComputePressureForceRangeAvx2(void* arg, int) {
   const __m256 inv_half_h = _mm256_set1_ps(2.f / h);
   const __m256 minus_mass = _mm256_set1_ps(-mass);
 
+  auto horiz = [](__m256 v) {
+    __m128 lo = _mm256_castps256_ps128(v);
+    __m128 hi = _mm256_extractf128_ps(v, 1);
+    __m128 s = _mm_add_ps(lo, hi);
+    s = _mm_hadd_ps(s, s);
+    s = _mm_hadd_ps(s, s);
+    return _mm_cvtss_f32(s);
+  };
+
   for (int i = start; i < end && i < static_cast<int>(pb.particle_entities.size());
        ++i) {
     Vector2 p1 = pb.predicted_positions[i];
@@ -775,6 +798,9 @@ inline void* ComputePressureForceRangeAvx2(void* arg, int) {
     __m256 vfy = _mm256_setzero_ps();
     __m256 cfx = _mm256_setzero_ps();
     __m256 cfy = _mm256_setzero_ps();
+
+    float tail_px = 0.f, tail_py = 0.f, tail_vx = 0.f, tail_vy = 0.f,
+      tail_cx = 0.f, tail_cy = 0.f;
 
     for (int dx = -1; dx <= 1; ++dx) {
       int nx = cx + dx;
@@ -866,35 +892,26 @@ inline void* ComputePressureForceRangeAvx2(void* arg, int) {
           float term = p1_term + (p2_pressure / (d2 * d2));
           float factor = -mass * term * grad;
 
-          pfx = _mm256_add_ps(pfx, _mm256_set1_ps(dir.x * factor));
-          pfy = _mm256_add_ps(pfy, _mm256_set1_ps(dir.y * factor));
+          tail_px += dir.x * factor;
+          tail_py += dir.y * factor;
 
           float visc = ViscosityKernel(r, h);
-          vfx = _mm256_add_ps(vfx, _mm256_set1_ps((v2x - v1x) * visc));
-          vfy = _mm256_add_ps(vfy, _mm256_set1_ps((v2y - v1y) * visc));
+          tail_vx += (v2x - v1x) * visc;
+          tail_vy += (v2y - v1y) * visc;
 
           float cohes = CohesionKernel(r, h);
-          cfx = _mm256_add_ps(cfx, _mm256_set1_ps(dir.x * cohes));
-          cfy = _mm256_add_ps(cfy, _mm256_set1_ps(dir.y * cohes));
+          tail_cx += dir.x * cohes;
+          tail_cy += dir.y * cohes;
         }
       }
     }
 
-    auto horiz = [](__m256 v) {
-      __m128 lo = _mm256_castps256_ps128(v);
-      __m128 hi = _mm256_extractf128_ps(v, 1);
-      __m128 s = _mm_add_ps(lo, hi);
-      s = _mm_hadd_ps(s, s);
-      s = _mm_hadd_ps(s, s);
-      return _mm_cvtss_f32(s);
-    };
-
-    pb.pressure_forces_data[i * 2] = horiz(pfx);
-    pb.pressure_forces_data[i * 2 + 1] = horiz(pfy);
-    pb.viscosity_forces_data[i * 2] = horiz(vfx);
-    pb.viscosity_forces_data[i * 2 + 1] = horiz(vfy);
-    pb.cohesion_forces_data[i * 2] = horiz(cfx);
-    pb.cohesion_forces_data[i * 2 + 1] = horiz(cfy);
+    pb.pressure_forces_data[i * 2] = horiz(pfx) + tail_px;
+    pb.pressure_forces_data[i * 2 + 1] = horiz(pfy) + tail_py;
+    pb.viscosity_forces_data[i * 2] = horiz(vfx) + tail_vx;
+    pb.viscosity_forces_data[i * 2 + 1] = horiz(vfy) + tail_vy;
+    pb.cohesion_forces_data[i * 2] = horiz(cfx) + tail_cx;
+    pb.cohesion_forces_data[i * 2 + 1] = horiz(cfy) + tail_cy;
   }
 
   return nullptr;
@@ -968,9 +985,14 @@ inline void ComputeParticlePressureForce(ECS& ecs, float dt, float damp) {
   ForceTask force_seed{0, n, sim.smoothing_radius, mass, &pb};
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
   static const bool use_avx2 = Avx2ForceAvailable();
-  RunParallelChunks(GetEffectiveThreads(n), n, force_seed,
-                    (use_avx2 && !NoAvx2ForDebug()) ? ComputePressureForceRangeAvx2
-                                                    : ComputePressureForceRange);
+  auto run_force = [&](void* (*fn)(void*, int)) {
+    RunParallelChunks(GetEffectiveThreads(n), n, force_seed, fn);
+  };
+
+  if (use_avx2 && !NoAvx2ForceForDebug())
+    run_force(ComputePressureForceRangeAvx2);
+  else
+    run_force(ComputePressureForceRange);
 #else
   RunParallelChunks(GetEffectiveThreads(n), n, force_seed,
                     ComputePressureForceRange);
@@ -1483,8 +1505,9 @@ inline void ComputeParticleDensity(ECS& ecs) {
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
   static const bool use_avx2 = Avx2DensityAvailable();
   RunParallelChunks(GetEffectiveThreads(n), n, seed,
-                    (use_avx2 && !NoAvx2ForDebug()) ? ComputeDensityRangeAvx2
-                                                    : ComputeDensityRange);
+                    (use_avx2 && !NoAvx2DensityForDebug())
+                      ? ComputeDensityRangeAvx2
+                      : ComputeDensityRange);
 #else
   RunParallelChunks(GetEffectiveThreads(n), n, seed, ComputeDensityRange);
 #endif
