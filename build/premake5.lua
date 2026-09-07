@@ -42,6 +42,40 @@ newoption({
 	description = "Build for web using Emscripten",
 })
 
+newoption({
+	trigger = "perf",
+	value = "MODE",
+	description = "extra optimization flags for Release gmake/GCC builds",
+	allowed = {
+		{ "none", "stock -O2 (default)" },
+		{ "fast", "-O3 -flto" },
+		{ "avx2", "-O3 -flto -mavx2 -mfma -mbmi2" },
+		{ "native", "-O3 -flto -march=native -mtune=native" },
+	},
+	default = "none",
+})
+
+local perf_table = {
+	none = {},
+	fast = { "-O3", "-flto" },
+	avx2 = { "-O3", "-flto", "-mavx2", "-mfma", "-mbmi2" },
+	native = { "-O3", "-flto", "-march=native", "-mtune=native" },
+}
+local perf_flags = perf_table[_OPTIONS["perf"] or "none"]
+
+local function apply_perf_flags()
+	if not perf_flags or #perf_flags == 0 then
+		return
+	end
+	filter({})
+	filter({ "action:gmake*", "toolset:gcc or clang", "configurations:Release" })
+	buildoptions(perf_flags)
+	if perf_flags[2] == "-flto" then
+		linkoptions({ "-flto" })
+	end
+	filter({})
+end
+
 function download_progress(total, current)
 	local ratio = current / total
 	ratio = math.min(math.max(ratio, 0), 1)
@@ -319,6 +353,8 @@ includedirs({ raylib_dir .. "/src" })
 filter({ "toolset:gcc or clang" })
 buildoptions({ "-Wshadow" })
 
+apply_perf_flags()
+
 filter("action:vs*")
 buildoptions({ "/w34456" })
 
@@ -471,6 +507,8 @@ if not _OPTIONS["with-emscripten"] then
 	filter({ "system:windows", "action:gmake*" })
 	buildoptions({ "-Winvalid-pch" })
 
+	apply_perf_flags()
+
 	filter({})
 end
 
@@ -517,6 +555,8 @@ if not _OPTIONS["with-emscripten"] then
 		"AudioToolbox.framework",
 		"QuartzCore.framework",
 	})
+
+	apply_perf_flags()
 
 	filter({})
 end
