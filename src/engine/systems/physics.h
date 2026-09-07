@@ -494,7 +494,7 @@ inline void* ComputeDensityRange(void* arg, int) {
 // masked Poly6 accumulation with no per-neighbor scalar loads. Compiled for
 // AVX2 regardless of the global flag set, but only selected when the CPU
 // actually supports it (see ComputeParticleDensity).
-#if defined(__x86_64__) && defined(__GNUC__) || defined(__clang__)
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
 #pragma GCC push_options
 #pragma GCC target("avx2")
 #include <immintrin.h>
@@ -731,6 +731,7 @@ inline void* ComputePressureForceRange(void* arg, int) {
 // self term, and masked lanes are forced to +0.0 bitwise to avoid any
 // NaN/inf propagation from the reciprocal of a zero-distance lane.
 #if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+#pragma GCC push_options
 #pragma GCC target("avx2")
 inline bool Avx2ForceAvailable() {
   return __builtin_cpu_supports("avx2");
@@ -916,6 +917,7 @@ inline void* ComputePressureForceRangeAvx2(void* arg, int) {
 
   return nullptr;
 }
+#pragma GCC pop_options
 #endif
 
 struct ApplyTask {
