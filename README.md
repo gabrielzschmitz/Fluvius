@@ -29,6 +29,17 @@ expect approximately _4× lower performance_ compared to the native build.
 
 **[Check Fluvius on itch.io](https://gabrielzschmitz.itch.io/fluvius)**
 
+Or run the same WebGL build locally in a container — the release package
+([ghcr.io/gabrielzschmitz/fluvius](https://github.com/gabrielzschmitz/Fluvius/pkgs/container/fluvius))
+serves it via nginx and is rebuilt on every release tag:
+
+```sh
+docker pull ghcr.io/gabrielzschmitz/fluvius:latest
+docker run --rm -p 8080:80 ghcr.io/gabrielzschmitz/fluvius:latest
+```
+
+Then open <http://localhost:8080>.
+
 
 ### 1. Clone the repository
 

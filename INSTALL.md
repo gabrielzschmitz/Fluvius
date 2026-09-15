@@ -229,6 +229,21 @@ The web build will generate:
 You can host these files on any web server to deploy your Fluvius online, or
 use the `fluvius-web.zip` the build places next to them.
 
+#### Run the Web Build with Docker
+
+The web build is also published as a Docker image on GitHub Container
+Registry (`ghcr.io/gabrielzschmitz/fluvius`) whenever a release tag is
+pushed. The image serves the WebGL build with nginx and is multi-arch
+(linux/amd64 and linux/arm64):
+
+```bash
+docker pull ghcr.io/gabrielzschmitz/fluvius:latest
+docker run --rm -p 8080:80 ghcr.io/gabrielzschmitz/fluvius:latest
+```
+
+Then open <http://localhost:8080>. Pin a specific version by tag instead:
+`docker pull ghcr.io/gabrielzschmitz/fluvius:1.0.0`.
+
 #### itch.io Web Build
 
 Pass `--itchio` to build with the itch.io shell (`src/app/itchio.html`)
