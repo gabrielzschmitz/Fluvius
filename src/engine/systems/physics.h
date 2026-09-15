@@ -33,6 +33,15 @@ inline bool threads_initialized = false;
 // call more than once: a gang of the same size is left untouched, a different
 // size tears down and respawns.
 inline void InitThreads(int threads) {
+#if defined(PLATFORM_WEB)
+  // Emscripten single-threaded builds cannot spawn std::thread (pthreads
+  // require -pthread + SharedArrayBuffer); run all physics on one thread.
+  (void)threads;
+  num_threads = 1;
+  threads_initialized = true;
+  logger::info("[APP] Single-threaded simulation (web)");
+  return;
+#else
   int count = threads > 0 ? threads : 1;
   num_threads = count;
 
@@ -42,6 +51,7 @@ inline void InitThreads(int threads) {
 
   threads_initialized = true;
   logger::info("[APP] Created {} threads for simulation", count);
+#endif
 }
 
 inline void ShutdownThreads() {
