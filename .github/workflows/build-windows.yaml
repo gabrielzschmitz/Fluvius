@@ -27,16 +27,15 @@ jobs:
         run: |
           make config=release_x64
 
-      - name: Package Windows release zip
+      - name: Package Windows release
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item bin/Release/fluvius.exe dist\
           Copy-Item resources dist\resources -Recurse
-          Compress-Archive -Path dist\* -DestinationPath dist\Fluvius-windows.zip
 
       - name: Upload Windows release
         uses: actions/upload-artifact@v4
         with:
           name: Fluvius-windows
-          path: dist/Fluvius-windows.zip
+          path: dist/
