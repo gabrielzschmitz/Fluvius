@@ -202,6 +202,9 @@ Then open the generated Xcode project.
    ./premake5 gmake --with-emscripten --graphics=openges2
    ```
 
+   Web builds always target OpenGL ES 2 (WebGL); if `--graphics` is omitted,
+   premake defaults to it automatically.
+
 3. Return to root directory:
    ```bash
    cd ..

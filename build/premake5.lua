@@ -124,26 +124,33 @@ function platform_defines()
 	filter({ "options:backend=win32" })
 	defines({ "PLATFORM_DESKTOP_WIN32" })
 
-	filter({ "options:graphics=opengl43" })
+	filter({ "options:graphics=opengl43", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_43" })
 
-	filter({ "options:graphics=opengl33" })
+	filter({ "options:graphics=opengl33", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_33" })
 
-	filter({ "options:graphics=opengl21" })
+	filter({ "options:graphics=opengl21", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_21" })
 
-	filter({ "options:graphics=opengl11" })
+	filter({ "options:graphics=opengl11", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_11" })
 
-	filter({ "options:graphics=openges3" })
+	filter({ "options:graphics=openges3", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_ES3" })
 
-	filter({ "options:graphics=openges2" })
+	filter({ "options:graphics=openges2", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_ES2" })
 
-	filter({ "options:graphics=software" })
+	filter({ "options:graphics=software", "options:not with-emscripten" })
 	defines({ "GRAPHICS_API_OPENGL_11_SOFTWARE" })
+
+	-- Emscripten only supports OpenGL ES (WebGL); default to ES2 even if --graphics unset
+	filter({ "options:with-emscripten", "options:graphics=openges3" })
+	defines({ "GRAPHICS_API_OPENGL_ES3" })
+
+	filter({ "options:with-emscripten" })
+	defines({ "GRAPHICS_API_OPENGL_ES2" })
 
 	filter({ "system:macosx" })
 	disablewarnings({ "deprecated-declarations" })
