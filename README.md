@@ -23,12 +23,12 @@ A [_WebGPU_](https://webgpu.org/) build of Fluvius is available on itch.io,
 allowing you to try the simulation directly in your browser without installing
 or building the project.
 
-**[Play Fluvius on itch.io](https://gabrielzschmitz.itch.io/fluvius)**
+Note that the WebGPU build is intended primarily for convenience and
+experimentation. Due to the additional overhead of running through the browser,
+expect approximately _4× lower performance_ compared to the native build.
 
-> [!NOTE]
-> The WebGPU build is intended primarily for convenience and experimentation.
-> Due to the additional overhead of running through the browser, expect
-> approximately **4× lower performance** compared to the native build.
+**[Check Fluvius on itch.io](https://gabrielzschmitz.itch.io/fluvius)**
+
 
 ### 1. Clone the repository
 
