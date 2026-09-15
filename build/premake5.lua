@@ -43,6 +43,11 @@ newoption({
 })
 
 newoption({
+	trigger = "itchio",
+	description = "Use the itch.io web shell (src/app/itchio.html) instead of index.html",
+})
+
+newoption({
 	trigger = "perf",
 	value = "MODE",
 	description = "extra optimization flags for Release gmake/GCC builds",
@@ -258,6 +263,11 @@ postbuildcommands({
 filter({})
 
 -- Emscripten Web Build Configuration
+local web_shell_file = "index.html"
+if _OPTIONS["itchio"] then
+	web_shell_file = "itchio.html"
+end
+
 filter({ "options:with-emscripten" })
 kind("ConsoleApp")
 targetextension(".html")
@@ -276,7 +286,7 @@ linkoptions({
 	"-s GL_EMULATE_GLES_VERSION_STRING_FORMAT=1 ",
 	"--no-heap-copy",
 	"--preload-file ../../resources@/resources",
-	"--shell-file ../../src/app/index.html",
+	"--shell-file ../../src/app/" .. web_shell_file,
 	"-s FULL_ES2=1",
 	"-sGL_ENABLE_GET_PROC_ADDRESS",
 })
