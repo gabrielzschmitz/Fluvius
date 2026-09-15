@@ -53,7 +53,7 @@ platforms including web builds.
 
 5. Run the Fluvius :
    ```bash
-   ./bin/Release/Fluvius
+   ./bin/Release/fluvius
    ```
 
 ---
@@ -118,7 +118,7 @@ platforms including web builds.
 
 4. Run the Fluvius :
    ```bash
-   ./bin/Release/Fluvius
+   ./bin/Release/fluvius
    ```
 
 #### Wayland Support
@@ -159,7 +159,7 @@ bear -- make config=release_x64 VERBOSE=1
 
 4. Run the Fluvius :
    ```bash
-   ./bin/Release/Fluvius
+   ./bin/Release/fluvius
    ```
 
 #### Alternative: Xcode
@@ -232,7 +232,8 @@ use the `fluvius-web.zip` the build places next to them.
 #### itch.io Web Build
 
 Pass `--itchio` to build with the itch.io shell (`src/app/itchio.html`)
-instead of the default `index.html`:
+instead of the default and to name the html output `index.html` (what
+itch.io serves as the entry page):
 
 ```bash
 cd build
@@ -244,14 +245,14 @@ emmake make config=release_web
 Run locally (serves on http://localhost:8000):
 
 ```bash
-emrun --serve_after_close bin/Release/fluvius.html
+emrun --serve_after_close bin/Release/index.html
 ```
 
 The build automatically packages a release zip next to the outputs:
 `bin/Release/fluvius-itchio.zip` (with `--itchio`) or
 `bin/Release/fluvius-web.zip`. Upload that zip directly to itch.io — it
-contains `fluvius.html`, `fluvius.js`, `fluvius.wasm` and `fluvius.data`
-with the `.data` file next to the HTML.
+contains the page (`index.html` for itchio, `fluvius.html` otherwise),
+its `.js`/`.wasm`/`.data` siblings and `icon.png` (favicon).
 
 ---
 
@@ -326,7 +327,7 @@ cd build
 cd ..
 make clean
 make -j$(nproc) config=release_x64
-./bin/Release/Fluvius
+./bin/Release/fluvius
 ```
 
 > **Note:** The physics kernels (density/force) are already compiled with AVX2

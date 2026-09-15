@@ -227,6 +227,7 @@ project(workspaceName)
 kind("ConsoleApp")
 location("build_files/")
 targetdir("../bin/%{cfg.buildcfg}")
+targetname("fluvius")
 
 filter({ "system:windows", "action:gmake*", "options:not with-emscripten" })
 files({ "../src/app/*.rc", "../src/app/*.ico" })
@@ -240,7 +241,7 @@ linkoptions({
 filter({ "system:windows", "action:vs*", "options:not with-emscripten" })
 files({ "../src/app/*.rc", "../src/app/*.ico" })
 
-filter("system:linux")
+filter({ "system:linux", "options:not with-emscripten" })
 local binDir = path.getabsolute("../bin/%{cfg.buildcfg}")
 postbuildcommands({
 	-- Copy the icon
@@ -253,13 +254,13 @@ postbuildcommands({
 	-- Generate desktop file line by line
 	'echo "[Desktop Entry]" > "'
 		.. binDir
-		.. '/Fluvius.desktop"',
-	'echo "Name=Fluvius" >> "' .. binDir .. '/Fluvius.desktop"',
-	'echo "Exec=' .. binDir .. '/Fluvius" >> "' .. binDir .. '/Fluvius.desktop"',
-	'echo "Icon=' .. binDir .. '/icon.png" >> "' .. binDir .. '/Fluvius.desktop"',
-	'echo "Type=Application" >> "' .. binDir .. '/Fluvius.desktop"',
-	'echo "Categories=Graphics;" >> "' .. binDir .. '/Fluvius.desktop"',
-	'chmod +x "' .. binDir .. '/Fluvius.desktop"',
+		.. '/fluvius.desktop"',
+	'echo "Name=Fluvius" >> "' .. binDir .. '/fluvius.desktop"',
+	'echo "Exec=' .. binDir .. '/fluvius" >> "' .. binDir .. '/fluvius.desktop"',
+	'echo "Icon=' .. binDir .. '/icon.png" >> "' .. binDir .. '/fluvius.desktop"',
+	'echo "Type=Application" >> "' .. binDir .. '/fluvius.desktop"',
+	'echo "Categories=Graphics;" >> "' .. binDir .. '/fluvius.desktop"',
+	'chmod +x "' .. binDir .. '/fluvius.desktop"',
 })
 
 filter({ "system:macosx" })
@@ -271,13 +272,17 @@ filter({})
 
 -- Emscripten Web Build Configuration
 local web_shell_file = "index.html"
+local web_target_name = "fluvius"
 if _OPTIONS["itchio"] then
+	-- itch.io serves the html file directly; it expects index.html
 	web_shell_file = "itchio.html"
+	web_target_name = "index"
 end
 
 filter({ "options:with-emscripten" })
 kind("ConsoleApp")
 targetextension(".html")
+targetname(web_target_name)
 buildoptions({
 	"-sGL_ENABLE_GET_PROC_ADDRESS",
 })
@@ -299,15 +304,18 @@ linkoptions({
 })
 
 	-- Zip the web outputs for release/distribution. Named fluvius-itchio.zip
-	-- when --itchio is used (ready for the itch.io upload form), otherwise
-	-- fluvius-web.zip.
+	-- when --itchio is used (ready for the itch.io upload form, containing
+	-- index.html), otherwise fluvius-web.zip. The favicon (icon.png) is copied
+	-- to the output folder and bundled in the zip too (the shell links it).
 	local web_zip_name = "fluvius-web.zip"
 	if _OPTIONS["itchio"] then
 		web_zip_name = "fluvius-itchio.zip"
 	end
+	local web_zip_entries = web_target_name .. ".html " .. web_target_name .. ".js " .. web_target_name .. ".wasm " .. web_target_name .. ".data icon.png"
 	local scripts_dir = path.getabsolute("../scripts")
 postbuildcommands({
-	'python3 "' .. scripts_dir .. '/package_release.py" "%{cfg.targetdir}" --out "%{cfg.targetdir}/' .. web_zip_name .. '" fluvius.html fluvius.js fluvius.wasm fluvius.data',
+	'cp "' .. ROOT .. '/resources/icon.png" "%{cfg.targetdir}/icon.png"',
+	'python3 "' .. scripts_dir .. '/package_release.py" "%{cfg.targetdir}" --out "%{cfg.targetdir}/' .. web_zip_name .. '" ' .. web_zip_entries,
 })
 
 filter({ "options:with-emscripten", "configurations:Release" })
@@ -548,6 +556,7 @@ if not _OPTIONS["with-emscripten"] then
 	language("C++")
 	location("build_files/")
 	targetdir("../bin/%{cfg.buildcfg}")
+	targetname("fluvius-bench")
 	cppdialect("C++17")
 
 	files({ "../src/bench/**.cpp", "../src/bench/**.h" })
