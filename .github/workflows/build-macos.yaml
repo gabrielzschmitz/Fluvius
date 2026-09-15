@@ -31,7 +31,7 @@ jobs:
 
       - name: Package macOS release
         run: |
-          mkdir -p dist
+          mkdir -p dist release
           cp bin/Release/fluvius dist/
           cp -r resources dist/
 
@@ -43,11 +43,11 @@ jobs:
 
       - name: Zip release package
         if: startsWith(github.ref, 'refs/tags/')
-        run: python3 scripts/package_release.py dist --out dist/Fluvius-macos.zip .
+        run: python3 scripts/package_release.py dist --out release/Fluvius-macos.zip .
 
       - name: Attach asset to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Fluvius-macos.zip
+          files: release/Fluvius-macos.zip
           fail_on_unmatched_files: true

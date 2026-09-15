@@ -32,7 +32,7 @@ jobs:
       - name: Package Windows release
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          New-Item -ItemType Directory -Force -Path dist,release | Out-Null
           Copy-Item bin/Release/fluvius.exe dist\
           Copy-Item resources dist\resources -Recurse
 
@@ -45,11 +45,11 @@ jobs:
       - name: Zip release package
         if: startsWith(github.ref, 'refs/tags/')
         shell: powershell
-        run: Compress-Archive -Path dist\* -DestinationPath dist\Fluvius-windows.zip
+        run: Compress-Archive -Path dist\* -DestinationPath release\Fluvius-windows.zip
 
       - name: Attach asset to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Fluvius-windows.zip
+          files: release/Fluvius-windows.zip
           fail_on_unmatched_files: true
