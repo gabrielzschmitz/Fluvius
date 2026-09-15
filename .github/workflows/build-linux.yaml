@@ -26,8 +26,15 @@ jobs:
         run: |
           make config=release_x64
 
-      - name: Upload Linux binary
+      - name: Package Linux release zip
+        run: |
+          mkdir -p dist
+          cp bin/Release/fluvius dist/
+          cp -r resources dist/
+          python3 scripts/package_release.py dist --out dist/Fluvius-linux.zip .
+
+      - name: Upload Linux release
         uses: actions/upload-artifact@v4
         with:
           name: Fluvius-linux
-          path: bin/Release/Fluvius
+          path: dist/Fluvius-linux.zip

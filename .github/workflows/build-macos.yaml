@@ -27,8 +27,15 @@ jobs:
         run: |
           make config=release_x64 CC=clang CXX=clang++
 
-      - name: Upload macOS binary
+      - name: Package macOS release zip
+        run: |
+          mkdir -p dist
+          cp bin/Release/fluvius dist/
+          cp -r resources dist/
+          python3 scripts/package_release.py dist --out dist/Fluvius-macos.zip .
+
+      - name: Upload macOS release
         uses: actions/upload-artifact@v4
         with:
           name: Fluvius-macos
-          path: bin/Release/Fluvius
+          path: dist/Fluvius-macos.zip

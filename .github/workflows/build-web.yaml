@@ -36,12 +36,12 @@ jobs:
           source emsdk/emsdk_env.sh
           emmake make config=release_web
 
-      - name: Upload Web build artifacts
+      - name: Package Web release zip
+        run: |
+          python3 scripts/package_release.py bin/Release --out bin/Release/Fluvius-web.zip fluvius.html fluvius.js fluvius.wasm fluvius.data
+
+      - name: Upload Web build artifact
         uses: actions/upload-artifact@v4
         with:
           name: Fluvius-web
-          path: |
-            bin/Release/fluvius.html
-            bin/Release/fluvius.js
-            bin/Release/fluvius.wasm
-            bin/Release/fluvius.data
+          path: bin/Release/Fluvius-web.zip
