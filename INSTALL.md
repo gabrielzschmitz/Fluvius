@@ -217,14 +217,14 @@ Then open the generated Xcode project.
 
 5. Run locally:
    ```bash
-   emrun bin/Release/Fluvius.html
+   emrun bin/Release/fluvius.html
    ```
 
 The web build will generate:
-- `Fluvius.html` - Main page
-- `Fluvius.js` - JavaScript runtime
-- `Fluvius.wasm` - WebAssembly binary
-- `Fluvius.data` - Packaged resources
+- `fluvius.html` - Main page
+- `fluvius.js` - JavaScript runtime
+- `fluvius.wasm` - WebAssembly binary
+- `fluvius.data` - Packaged resources
 
 You can host these files on any web server to deploy your Fluvius online.
 

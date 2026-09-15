@@ -41,7 +41,7 @@ jobs:
         with:
           name: Fluvius-web
           path: |
-            bin/Release/Fluvius.html
-            bin/Release/Fluvius.js
-            bin/Release/Fluvius.wasm
-            bin/Release/Fluvius.data
+            bin/Release/fluvius.html
+            bin/Release/fluvius.js
+            bin/Release/fluvius.wasm
+            bin/Release/fluvius.data
