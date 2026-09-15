@@ -298,6 +298,18 @@ linkoptions({
 	"-sGL_ENABLE_GET_PROC_ADDRESS",
 })
 
+	-- Zip the web outputs for release/distribution. Named fluvius-itchio.zip
+	-- when --itchio is used (ready for the itch.io upload form), otherwise
+	-- fluvius-web.zip.
+	local web_zip_name = "fluvius-web.zip"
+	if _OPTIONS["itchio"] then
+		web_zip_name = "fluvius-itchio.zip"
+	end
+	local scripts_dir = path.getabsolute("../scripts")
+postbuildcommands({
+	'python3 "' .. scripts_dir .. '/package_release.py" "%{cfg.targetdir}" --out "%{cfg.targetdir}/' .. web_zip_name .. '" fluvius.html fluvius.js fluvius.wasm fluvius.data',
+})
+
 filter({ "options:with-emscripten", "configurations:Release" })
 buildoptions({ "-Os" })
 linkoptions({ "-Os" })

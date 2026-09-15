@@ -226,7 +226,8 @@ The web build will generate:
 - `fluvius.wasm` - WebAssembly binary
 - `fluvius.data` - Packaged resources
 
-You can host these files on any web server to deploy your Fluvius online.
+You can host these files on any web server to deploy your Fluvius online, or
+use the `fluvius-web.zip` the build places next to them.
 
 #### itch.io Web Build
 
@@ -246,8 +247,11 @@ Run locally (serves on http://localhost:8000):
 emrun --serve_after_close bin/Release/fluvius.html
 ```
 
-Upload the resulting `fluvius.html`, `fluvius.js`, `fluvius.wasm` and
-`fluvius.data` to itch.io (zip them with the `.data` file next to the HTML).
+The build automatically packages a release zip next to the outputs:
+`bin/Release/fluvius-itchio.zip` (with `--itchio`) or
+`bin/Release/fluvius-web.zip`. Upload that zip directly to itch.io — it
+contains `fluvius.html`, `fluvius.js`, `fluvius.wasm` and `fluvius.data`
+with the `.data` file next to the HTML.
 
 ---
 
