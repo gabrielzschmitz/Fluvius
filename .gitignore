@@ -406,3 +406,12 @@ Makefile
 *.swp
 *.swo
 *.swn
+
+# Article auxiliar files
+.aux/
+*.aux
+*.log
+*.toc
+*.out
+*.bbl
+*.blg
