@@ -247,8 +247,10 @@ Then open <http://localhost:8080>. Pin a specific version by tag instead:
 #### itch.io Web Build
 
 Pass `--itchio` to build with the itch.io shell (`src/app/itchio.html`)
-instead of the default and to name the html output `index.html` (what
-itch.io serves as the entry page):
+instead of the default and to produce a single self-contained
+`index.html` (what itch.io serves as the entry page). The wasm and the
+assets the sim loads are embedded into the html, so it works even when
+opened directly by double-clicking — no web server needed:
 
 ```bash
 cd build
@@ -257,17 +259,18 @@ cd ..
 emmake make config=release_web
 ```
 
-Run locally (serves on http://localhost:8000):
+Run locally — double-click `bin/Release/index.html`, or serve it:
 
 ```bash
 emrun --serve_after_close bin/Release/index.html
 ```
 
-The build automatically packages a release zip next to the outputs:
-`bin/Release/fluvius-itchio.zip` (with `--itchio`) or
-`bin/Release/fluvius-web.zip`. Upload that zip directly to itch.io — it
-contains the page (`index.html` for itchio, `fluvius.html` otherwise),
-its `.js`/`.wasm`/`.data` siblings and `icon.png` (favicon).
+The build packages `bin/Release/fluvius-itchio.zip` containing
+`index.html` and the favicon `icon.png`. Upload that zip directly to
+itch.io (a single self-contained html can even be uploaded without the
+zip). The default (non-`--itchio`) web build produces the usual
+multi-file `fluvius.html`/`.js`/`.wasm`/`.data` set plus
+`fluvius-web.zip`.
 
 ---
 

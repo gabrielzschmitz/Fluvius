@@ -273,10 +273,15 @@ filter({})
 -- Emscripten Web Build Configuration
 local web_shell_file = "index.html"
 local web_target_name = "fluvius"
+local web_standalone = false
 if _OPTIONS["itchio"] then
 	-- itch.io serves the html file directly; it expects index.html
 	web_shell_file = "itchio.html"
 	web_target_name = "index"
+	-- Embed everything (wasm + assets) into the html so it is a single
+	-- self-contained file: double-clicking index.html plays the sim with
+	-- no web server (and itch.io accepts a single html upload).
+	web_standalone = true
 end
 
 filter({ "options:with-emscripten" })
@@ -286,22 +291,46 @@ targetname(web_target_name)
 buildoptions({
 	"-sGL_ENABLE_GET_PROC_ADDRESS",
 })
-linkoptions({
-	"-s USE_GLFW=3",
-	"-s ASYNCIFY",
-	"-s TOTAL_MEMORY=67108864",
-	"-s FORCE_FILESYSTEM=1",
-	"-s ALLOW_MEMORY_GROWTH=1",
-	"-s EXPORTED_FUNCTIONS=['_main']",
-	"-s EXPORTED_RUNTIME_METHODS=ccall",
-	"-s OFFSCREENCANVAS_SUPPORT=1 ",
-	"-s GL_EMULATE_GLES_VERSION_STRING_FORMAT=1 ",
-	"--no-heap-copy",
-	"--preload-file ../../resources@/resources",
-	"--shell-file ../../src/app/" .. web_shell_file,
-	"-s FULL_ES2=1",
-	"-sGL_ENABLE_GET_PROC_ADDRESS",
-})
+if not web_standalone then
+	linkoptions({
+		"-s USE_GLFW=3",
+		"-s ASYNCIFY",
+		"-s TOTAL_MEMORY=67108864",
+		"-s FORCE_FILESYSTEM=1",
+		"-s ALLOW_MEMORY_GROWTH=1",
+		"-s EXPORTED_FUNCTIONS=['_main']",
+		"-s EXPORTED_RUNTIME_METHODS=ccall",
+		"-s OFFSCREENCANVAS_SUPPORT=1 ",
+		"-s GL_EMULATE_GLES_VERSION_STRING_FORMAT=1 ",
+		"--no-heap-copy",
+		"--preload-file ../../resources@/resources",
+		"--shell-file ../../src/app/" .. web_shell_file,
+		"-s FULL_ES2=1",
+		"-sGL_ENABLE_GET_PROC_ADDRESS",
+	})
+else
+	linkoptions({
+		"-s USE_GLFW=3",
+		"-s ASYNCIFY",
+		"-s TOTAL_MEMORY=67108864",
+		"-s FORCE_FILESYSTEM=1",
+		"-s ALLOW_MEMORY_GROWTH=1",
+		"-s EXPORTED_FUNCTIONS=['_main']",
+		"-s EXPORTED_RUNTIME_METHODS=ccall",
+		"-s OFFSCREENCANVAS_SUPPORT=1 ",
+		"-s GL_EMULATE_GLES_VERSION_STRING_FORMAT=1 ",
+		"-s SINGLE_FILE=1",
+		"--no-heap-copy",
+		-- Embed only the assets the sim loads at runtime (the 35MB demo.gif
+		-- is README-only). Mounted under /fonts (where raylib's fopen of
+		-- "fonts/simple-font.png" resolves) and /resources as a fallback.
+		"--embed-file ../../resources/fonts/simple-font.png@/fonts/simple-font.png",
+		"--embed-file ../../resources/fonts/simple-font.png@/resources/fonts/simple-font.png",
+		"--shell-file ../../src/app/" .. web_shell_file,
+		"-s FULL_ES2=1",
+		"-sGL_ENABLE_GET_PROC_ADDRESS",
+	})
+end
 
 	-- Zip the web outputs for release/distribution. Named fluvius-itchio.zip
 	-- when --itchio is used (ready for the itch.io upload form, containing
@@ -311,7 +340,12 @@ linkoptions({
 	if _OPTIONS["itchio"] then
 		web_zip_name = "fluvius-itchio.zip"
 	end
-	local web_zip_entries = web_target_name .. ".html " .. web_target_name .. ".js " .. web_target_name .. ".wasm " .. web_target_name .. ".data icon.png"
+	local web_zip_entries
+	if web_standalone then
+		web_zip_entries = "index.html icon.png"
+	else
+		web_zip_entries = web_target_name .. ".html " .. web_target_name .. ".js " .. web_target_name .. ".wasm " .. web_target_name .. ".data icon.png"
+	end
 	local scripts_dir = path.getabsolute("../scripts")
 postbuildcommands({
 	'cp "' .. ROOT .. '/resources/icon.png" "%{cfg.targetdir}/icon.png"',

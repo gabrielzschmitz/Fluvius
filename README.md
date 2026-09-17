@@ -27,7 +27,10 @@ Note that the WebGPU build is intended primarily for convenience and
 experimentation. Due to the additional overhead of running through the browser,
 expect approximately _4× lower performance_ compared to the native build.
 
-**[Check Fluvius on itch.io](https://gabrielzschmitz.itch.io/fluvius)**
+**[Check Fluvius on itch.io](https://gabrielzschmitz.itch.io/fluvius)** — the
+itch.io build is a single self-contained `index.html`, so you can also download
+it and run the simulation by simply double-clicking the file, no server or
+build required.
 
 Or run the same WebGL build locally in a container — the release package
 ([ghcr.io/gabrielzschmitz/fluvius](https://github.com/gabrielzschmitz/Fluvius/pkgs/container/fluvius))
