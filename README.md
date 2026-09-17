@@ -78,29 +78,20 @@ Follow the platform-specific build instructions in `INSTALL.md`.
 ## Project Structure
 
 ```text
-src
-├── app
-├── engine
-│   ├── components
-│   ├── ecs
-│   └── systems
-├── entities
-├── tests
+article/    # LaTeX paper (sources, figures, compiled main.pdf)
+build/      # premake5 build scripts
+include/    # shared headers
+resources/  # icons, fonts, and demo assets
+scripts/    # packaging/release tooling
+src/        # C++ sources
+├── app/        # application lifecycle, scenes, platform entrypoints
+├── engine/     # ECS engine, components, and systems
+├── entities/   # reusable entity builders
+├── tests/      # tests and benchmarks
 └── main.cpp
 ```
 
-### Core Layout
-
-* **app/** -- application lifecycle, simulation state, platform entrypoints
-* **engine/ecs/** -- ECS engine itself
-* **engine/components/** -- ECS component definitions
-* **engine/systems/** -- simulation, physics, and UI systems
-* **entities/** -- reusable entity builders
-* **tests/** -- ECS and sparse set benchmarks/tests
-
----
-
-## Architecture
+### Architecture
 
 Fluvius uses **[Motrix](https://github.com/gabrielzschmitz/Motrix)** as its ECS
 backbone:
@@ -111,6 +102,14 @@ backbone:
 
 This separation keeps simulation logic modular, cache-friendly, and easy to
 extend.
+
+---
+
+## Article
+
+The article **“Simulação de Fluídos SPH usando ECS”** (SPH fluid simulation
+using ECS) is included under `article/` together with its LaTeX sources and
+figures. The compiled manuscript is available as `article/main.pdf`.
 
 ---
 
